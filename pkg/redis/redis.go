@@ -99,9 +99,9 @@ func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byt
 	}
 
 	var s *bytes.Buffer
-	if _s, ok := w.sessions.Load([2]interface{}{srcHost, srcPort}); !ok {
+	if _s, ok := w.sessions.Load(common.RemoteKey(srcHost, srcPort)); !ok {
 		s = &bytes.Buffer{}
-		_s, loaded := w.sessions.LoadOrStore([2]interface{}{srcHost, srcPort}, s)
+		_s, loaded := w.sessions.LoadOrStore(common.RemoteKey(srcHost, srcPort), s)
 		if loaded {
 			s = _s.(*bytes.Buffer)
 		}
@@ -157,9 +157,9 @@ func NewFileWriter(f *os.File) *FileWriter {
 
 func (w *FileWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
 	var s *bytes.Buffer
-	if _s, ok := w.sessions.Load([2]interface{}{srcHost, srcPort}); !ok {
+	if _s, ok := w.sessions.Load(common.RemoteKey(srcHost, srcPort)); !ok {
 		s = &bytes.Buffer{}
-		_s, loaded := w.sessions.LoadOrStore([2]interface{}{srcHost, srcPort}, s)
+		_s, loaded := w.sessions.LoadOrStore(common.RemoteKey(srcHost, srcPort), s)
 		if loaded {
 			s = _s.(*bytes.Buffer)
 		}
