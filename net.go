@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/google/gopacket/pcap"
 	"log"
 	"net"
@@ -15,17 +14,18 @@ func findDevice(target net.IP) (dev pcap.Interface, ok bool) {
 	}
 
 	// 打印设备信息
-	fmt.Println("Devices found:")
+	//fmt.Println("Devices found:")
 	for _, device := range devices {
-		fmt.Println("\nName: ", device.Name)
-		fmt.Println("Description: ", device.Description)
-		fmt.Println("Devices addresses: ", device.Description)
+		//fmt.Println("\nName: ", device.Name)
+		//fmt.Println("Description: ", device.Description)
+		//fmt.Println("Devices addresses: ", device.Description)
 		for _, address := range device.Addresses {
-			fmt.Println("- IP address: ", address.IP)
-			fmt.Println("- Subnet mask: ", address.Netmask)
+			//fmt.Println("- IP address: ", address.IP)
+			//fmt.Println("- Subnet mask: ", address.Netmask)
 			if address.IP.Equal(target) {
 				dev = device
 				ok = true
+				return
 			}
 		}
 	}
