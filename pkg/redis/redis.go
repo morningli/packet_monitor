@@ -68,13 +68,10 @@ func (r *Monitor) Feed(packet gopacket.Packet) {
 }
 
 type NetworkWriter struct {
-	dstHost net.IP
-	dstPort layers.TCPPort
-
+	dstHost  net.IP
+	dstPort  layers.TCPPort
 	sessions sync.Map
-
-	clusterMode bool
-	client      redis.UniversalClient
+	client   redis.UniversalClient
 }
 
 func NewNetworkWriter(dstHost net.IP, dstPort layers.TCPPort) *NetworkWriter {
@@ -84,20 +81,9 @@ func NewNetworkWriter(dstHost net.IP, dstPort layers.TCPPort) *NetworkWriter {
 func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
 	if w.client == nil {
 		addr := fmt.Sprintf("%s:%d", w.dstHost.String(), w.dstPort)
-
-		var s redis.UniversalClient
-		s = redis.NewClient(&redis.Options{
+		w.client = redis.NewClient(&redis.Options{
 			Addr: addr,
 		})
-		err := s.ClusterSlots(context.Background()).Err()
-		if err == nil {
-			_ = s.Close()
-			s = redis.NewClusterClient(&redis.ClusterOptions{
-				Addrs: []string{addr},
-			})
-			w.clusterMode = true
-		}
-		w.client = s
 	}
 
 	var s *bytes.Buffer
