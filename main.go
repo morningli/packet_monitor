@@ -8,6 +8,7 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/morningli/packet_monitor/pkg/common"
 	"github.com/morningli/packet_monitor/pkg/redis"
+	"golang.org/x/sync/errgroup"
 	"log"
 	"net"
 	"os"
@@ -48,10 +49,9 @@ func main() {
 	}
 	defer handle.Close()
 
-	var monitor common.Monitor = &common.DefaultMonitor{}
+	var wr common.Writer
 	switch *protocol {
 	case "redis":
-		monitor = redis.NewMonitor(host, layers.TCPPort(*localPort))
 		if len(*replayTarget) > 0 {
 			tmp := strings.Split(*replayTarget, ":")
 			if len(tmp) != 2 {
@@ -61,24 +61,46 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			monitor.SetWriter(redis.NewNetworkWriter(net.ParseIP(tmp[0]), layers.TCPPort(port)))
+			wr = redis.NewNetworkWriter(net.ParseIP(tmp[0]), layers.TCPPort(port))
 		} else {
 			var f *os.File
 			if len(*outFile) == 0 {
 				f = os.Stdout
 			} else {
-				f, err = os.OpenFile(*outFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0544)
+				f, err := os.OpenFile(*outFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0544)
 				if err != nil {
 					log.Fatal(err)
 				}
+				defer f.Close()
 			}
-			monitor.SetWriter(redis.NewFileWriter(f))
+			wr = redis.NewFileWriter(f)
 		}
 	}
 
 	// Use the handle as a packet source to process all packets
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	for packet := range packetSource.Packets() {
-		monitor.Feed(packet)
+	packets := packetSource.Packets()
+
+	eg := errgroup.Group{}
+	const threads = 100 // for 20w/s
+	for i := 0; i < threads; i++ {
+		eg.Go(func() error {
+			var monitor common.Monitor = &common.DefaultMonitor{}
+			switch *protocol {
+			case "redis":
+				monitor = redis.NewMonitor(host, layers.TCPPort(*localPort))
+				monitor.SetWriter(wr)
+			}
+			for {
+				select {
+				case packet, ok := <-packets:
+					if !ok {
+						return nil
+					}
+					monitor.Feed(packet)
+				}
+			}
+		})
 	}
+	_ = eg.Wait()
 }
