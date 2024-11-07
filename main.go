@@ -67,7 +67,7 @@ func main() {
 			if len(*outFile) == 0 {
 				f = os.Stdout
 			} else {
-				f, err = os.OpenFile(*outFile, os.O_TRUNC|os.O_WRONLY, 0544)
+				f, err = os.OpenFile(*outFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0544)
 				if err != nil {
 					log.Fatal(err)
 				}
