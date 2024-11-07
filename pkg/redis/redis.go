@@ -49,12 +49,12 @@ func (r *Monitor) Feed(packet gopacket.Packet) {
 		return
 	}
 
-	if bytes.Compare(ip.SrcIP, r.localHost) == 0 && tcp.SrcPort == r.localPort {
+	if ip.SrcIP.Equal(r.localHost) && tcp.SrcPort == r.localPort {
 		// TODO packet out，ignore
 		return
 	}
 
-	if bytes.Compare(ip.DstIP, r.localHost) == 0 && tcp.DstPort == r.localPort {
+	if ip.DstIP.Equal(r.localHost) && tcp.DstPort == r.localPort {
 		if r.wr != nil {
 			err := r.wr.Write(ip.SrcIP, tcp.SrcPort, tcpLayer.LayerPayload())
 			if err != nil {
