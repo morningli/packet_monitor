@@ -2,5 +2,5 @@
 
 ## install lib
 
-    sudo yum install libpcap
-    sudo yum install libpcap-devel
+    sudo yum install -y libpcap
+    sudo yum install -y libpcap-devel

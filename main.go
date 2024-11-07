@@ -1,7 +1,8 @@
-package packet_monitor
+package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -16,25 +17,31 @@ import (
 )
 
 var (
-	device             = flag.String("i", "eth0", "network interface")
-	filter             = flag.String("F", "tcp and port 6379", "network filter, BPF format")
-	protocol           = flag.String("p", "redis", "protocol, eg:redis")
-	outFile            = flag.String("file", "", "save to file")
-	replayTarget       = flag.String("replay-target", "", "replay target")
-	snapshotLen  int32 = 1500
-	promiscuous  bool  = false
-	err          error
-	timeout      time.Duration = -1
-	handle       *pcap.Handle
+	localHost    = flag.String("h", "", "monitor listened ip")
+	localPort    = flag.Int("p", 8003, "monitor listened port")
+	protocol     = flag.String("P", "redis", "protocol, eg:redis")
+	outFile      = flag.String("file", "", "save to file")
+	replayTarget = flag.String("remote", "", "replay to remote service")
+
+	snapshotLen int32 = 1500
 )
 
 func main() {
+	flag.Parse()
+
+	host := net.ParseIP(*localHost)
+	device, ok := findDevice(host)
+	if !ok {
+		log.Fatal("cannot find device relate to host")
+	}
+	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, localPort)
+
 	// Open device
-	handle, err = pcap.OpenLive(*device, snapshotLen, promiscuous, timeout)
+	handle, err := pcap.OpenLive(device.Name, snapshotLen, false, -1*time.Second)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = handle.SetBPFFilter(*filter)
+	err = handle.SetBPFFilter(filter)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,7 +50,7 @@ func main() {
 	var monitor common.Monitor = &common.DefaultMonitor{}
 	switch *protocol {
 	case "redis":
-		monitor = &redis.Monitor{}
+		monitor = redis.NewMonitor(host, layers.TCPPort(*localPort))
 		if len(*replayTarget) > 0 {
 			tmp := strings.Split(*replayTarget, ":")
 			if len(tmp) != 2 {
