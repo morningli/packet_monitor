@@ -146,20 +146,32 @@ func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byt
 }
 
 type FileWriter struct {
-	f    *os.File
-	buff *bytes.Buffer
+	f *os.File
+
+	sessions sync.Map
 }
 
 func NewFileWriter(f *os.File) *FileWriter {
-	return &FileWriter{f: f, buff: &bytes.Buffer{}}
+	return &FileWriter{f: f}
 }
 
 func (w *FileWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
-	_, err := w.buff.Write(data)
+	var s *bytes.Buffer
+	if _s, ok := w.sessions.Load([2]interface{}{srcHost, srcPort}); !ok {
+		s = &bytes.Buffer{}
+		_s, loaded := w.sessions.LoadOrStore([2]interface{}{srcHost, srcPort}, s)
+		if loaded {
+			s = _s.(*bytes.Buffer)
+		}
+	} else {
+		s = _s.(*bytes.Buffer)
+	}
+
+	_, err := s.Write(data)
 	if err != nil {
 		log.Fatal(err)
 	}
-	rd := resp.NewReader(w.buff)
+	rd := resp.NewReader(s)
 	for {
 		v, _, err := rd.ReadValue()
 		if err == io.EOF {

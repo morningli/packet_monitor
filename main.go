@@ -34,6 +34,7 @@ func main() {
 	if !ok {
 		log.Fatal("cannot find device relate to host")
 	}
+	//tcp and host 10.177.26.250 and port 8003
 	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, localPort)
 
 	// Open device
