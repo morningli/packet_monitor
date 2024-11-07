@@ -6,6 +6,7 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/tidwall/resp v0.1.1
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 )
 
 require (

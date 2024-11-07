@@ -9,6 +9,7 @@ import (
 	"github.com/morningli/packet_monitor/pkg/common"
 	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/resp"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"log"
 	"net"
@@ -65,10 +66,13 @@ func (r *Monitor) Feed(packet gopacket.Packet) {
 }
 
 type NetworkWriter struct {
-	dstHost     net.IP
-	dstPort     layers.TCPPort
+	dstHost net.IP
+	dstPort layers.TCPPort
+
+	sessions sync.Map
+
 	clusterMode bool
-	sessions    sync.Map
+	client      redis.UniversalClient
 }
 
 func NewNetworkWriter(dstHost net.IP, dstPort layers.TCPPort) *NetworkWriter {
@@ -76,55 +80,95 @@ func NewNetworkWriter(dstHost net.IP, dstPort layers.TCPPort) *NetworkWriter {
 }
 
 func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
-	var s redis.UniversalClient
+	if w.client == nil {
+		addr := fmt.Sprintf("%s:%d", w.dstHost.String(), w.dstPort)
 
-	if _s, ok := w.sessions.Load([2]interface{}{srcHost, srcPort}); !ok {
-		if w.clusterMode {
+		var s redis.UniversalClient
+		s = redis.NewClient(&redis.Options{
+			Addr: addr,
+		})
+		err := s.ClusterSlots(context.Background()).Err()
+		if err == nil {
+			_ = s.Close()
 			s = redis.NewClusterClient(&redis.ClusterOptions{
-				Addrs: []string{},
+				Addrs: []string{addr},
 			})
-		} else {
-			s = redis.NewClient(&redis.Options{
-				Addr: "localhost:6379",
-			})
-			err := s.ClusterSlots(context.Background()).Err()
-			if err == nil {
-				_ = s.Close()
-				s = redis.NewClusterClient(&redis.ClusterOptions{
-					Addrs: []string{},
-				})
-				w.clusterMode = true
-			}
+			w.clusterMode = true
 		}
+		w.client = s
+	}
+
+	var s *bytes.Buffer
+	if _s, ok := w.sessions.Load([2]interface{}{srcHost, srcPort}); !ok {
+		s = &bytes.Buffer{}
 		_s, loaded := w.sessions.LoadOrStore([2]interface{}{srcHost, srcPort}, s)
 		if loaded {
-			s = _s.(redis.UniversalClient)
+			s = _s.(*bytes.Buffer)
 		}
 	} else {
-		s = _s.(redis.UniversalClient)
+		s = _s.(*bytes.Buffer)
 	}
-	return nil
-}
 
-type FileWriter struct {
-	f *os.File
-}
-
-func NewFileWriter(f *os.File) *FileWriter {
-	return &FileWriter{f: f}
-}
-
-func (w *FileWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
-	_, err := fmt.Fprintf(w.f, "%v %s->%s\n", time.Now(), srcHost.String(), srcPort.String())
+	_, err := s.Write(data)
 	if err != nil {
 		log.Fatal(err)
 	}
-	rd := resp.NewReader(bytes.NewBuffer(data))
+
+	eg := errgroup.Group{}
+
+	rd := resp.NewReader(s)
 	for {
 		v, _, err := rd.ReadValue()
 		if err == io.EOF {
 			break
 		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if v.Type() == resp.Array {
+			var args []interface{}
+			for _, v := range v.Array() {
+				if v.Type() == resp.BulkString {
+					args = append(args, v.Bytes())
+				}
+			}
+			eg.Go(func() error {
+				return w.client.Do(context.Background(), args...).Err()
+			})
+		}
+	}
+	err = eg.Wait()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return nil
+}
+
+type FileWriter struct {
+	f    *os.File
+	buff *bytes.Buffer
+}
+
+func NewFileWriter(f *os.File) *FileWriter {
+	return &FileWriter{f: f, buff: &bytes.Buffer{}}
+}
+
+func (w *FileWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
+	_, err := w.buff.Write(data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	rd := resp.NewReader(w.buff)
+	for {
+		v, _, err := rd.ReadValue()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		_, err = fmt.Fprintf(w.f, "%v %s->%s\n", time.Now(), srcHost.String(), srcPort.String())
 		if err != nil {
 			log.Fatal(err)
 		}
