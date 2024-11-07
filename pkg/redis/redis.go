@@ -78,7 +78,7 @@ type NetworkWriter struct {
 }
 
 func NewNetworkWriter(dstHost net.IP, dstPort layers.TCPPort) *NetworkWriter {
-	return &NetworkWriter{}
+	return &NetworkWriter{dstHost: dstHost, dstPort: dstPort}
 }
 
 func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
