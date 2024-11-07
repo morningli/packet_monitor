@@ -103,7 +103,6 @@ func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byt
 	}
 
 	eg := errgroup.Group{}
-
 	rd := resp.NewReader(s)
 	for {
 		v, _, err := rd.ReadValue()
@@ -122,20 +121,20 @@ func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byt
 				}
 			}
 			eg.Go(func() error {
-				return w.client.Do(context.Background(), args...).Err()
+				err := w.client.Do(context.Background(), args...).Err()
+				if err != nil {
+					log.Printf("excute command fail.args:%+v,err:%s\n", args, err)
+				}
+				return nil
 			})
 		}
 	}
-	err = eg.Wait()
-	if err != nil {
-		log.Fatal(err)
-	}
+	_ = eg.Wait()
 	return nil
 }
 
 type FileWriter struct {
-	f *os.File
-
+	f        *os.File
 	sessions sync.Map
 }
 
