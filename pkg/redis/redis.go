@@ -14,6 +14,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -180,21 +182,27 @@ func (w *FileWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) 
 		if err != nil {
 			log.Fatal(err)
 		}
-		_, err = fmt.Fprintf(w.f, "%v %s->%s\n", time.Now(), srcHost.String(), srcPort.String())
-		if err != nil {
-			log.Fatal(err)
-		}
-		_, err = fmt.Fprintf(w.f, "Read %s\n", v.Type())
-		if err != nil {
-			log.Fatal(err)
-		}
+
+		buff := strings.Builder{}
+		buff.Write(strconv.AppendFloat(nil, float64(time.Now().UnixMicro())/1e6, 'f', 6, 64))
+		buff.WriteString(" [0 ")
+		buff.WriteString(srcHost.String())
+		buff.WriteString(":")
+		buff.WriteString(srcPort.String())
+		buff.WriteString("]")
+
 		if v.Type() == resp.Array {
-			for i, v := range v.Array() {
-				_, err = fmt.Fprintf(w.f, "  #%d %s, value: '%s'\n", i, v.Type(), v)
-				if err != nil {
-					log.Fatal(err)
+			for _, v := range v.Array() {
+				if v.Type() == resp.BulkString {
+					buff.WriteString(" \"")
+					buff.Write(v.Bytes())
+					buff.WriteString("\"")
 				}
 			}
+		}
+		_, err = fmt.Fprintln(w.f, buff.String())
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 	return nil
