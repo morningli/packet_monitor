@@ -13,8 +13,9 @@ print to shell
     
 save to file
     
-    ./packet_monitor -h <redis-host> -p <redis-port> -file out.txt
+    ./packet_monitor -h <redis-host> -p <redis-port> -o file:out.txt
 
 replay requests on other nodes
     
-    ./packet_monitor -h <redis-host> -p <redis-port> -remote <remote-host>:<remote-port>    
+    ./packet_monitor -h <redis-host> -p <redis-port> -o single:<remote-host>:<remote-port>
+    ./packet_monitor -h <redis-host> -p <redis-port> -o cluster:<remote-host>:<remote-port>,<remote-host>:<remote-port>    

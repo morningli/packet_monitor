@@ -61,29 +61,39 @@ func main() {
 		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(packets)})
 	}
 
-	tmp := strings.Split(*output, ":")
-	outputType := tmp[0]
+	var outputType string
+	var outputParams string
+	pos := strings.Index(*output, ":")
+	if pos == -1 {
+		outputType = *output
+	} else {
+		outputType = (*output)[:pos]
+		if pos != len(*output)-1 {
+			outputParams = (*output)[pos+1:]
+		}
+	}
+
 	var wr common.Writer
 	switch *protocol {
 	case "redis":
 		switch outputType {
 		case "single":
-			if len(tmp) != 2 {
+			if len(outputParams) == 0 {
 				log.Fatalf("No address specified")
 			}
-			wr = redis.NewNetworkWriter(tmp[1], false)
+			wr = redis.NewNetworkWriter(outputParams, false)
 		case "cluster":
-			if len(tmp) != 2 {
+			if len(outputParams) == 0 {
 				log.Fatalf("No address specified")
 			}
-			wr = redis.NewNetworkWriter(tmp[1], true)
+			wr = redis.NewNetworkWriter(outputParams, true)
 		case "default":
 			wr = redis.NewFileWriter(os.Stdout)
 		case "file":
-			if len(tmp) != 2 {
+			if len(outputParams) == 0 {
 				log.Fatalf("No file name specified")
 			}
-			f, err := os.OpenFile(tmp[1], os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0544)
+			f, err := os.OpenFile(outputParams, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0544)
 			if err != nil {
 				log.Fatal(err)
 			}
