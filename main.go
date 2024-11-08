@@ -28,6 +28,7 @@ type: default/file/single/cluster...
 - file: output to file, params is file name, eg: file:out.txt
 - single: output to single redis, params is redis address, eg: single:127.0.0.1:8003
 - cluster： output to redis cluster, params is cluster address, eg: cluster:127.0.0.1:8003,127.0.0.2:8003`)
+	workerNum = flag.Int("worker-num", 10, "worker number")
 )
 
 func main() {
@@ -95,8 +96,7 @@ func main() {
 	packets := packetSource.Packets()
 
 	eg := errgroup.Group{}
-	const threads = 100 // for 20w/s
-	for i := 0; i < threads; i++ {
+	for i := 0; i < *workerNum; i++ {
 		eg.Go(func() error {
 			var monitor common.Monitor = &common.DefaultMonitor{}
 			switch *protocol {
