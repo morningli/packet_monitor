@@ -68,22 +68,27 @@ func (r *Monitor) Feed(packet gopacket.Packet) {
 }
 
 type NetworkWriter struct {
-	dstHost  net.IP
-	dstPort  layers.TCPPort
+	address  string
+	cluster  bool
 	sessions sync.Map
 	client   redis.UniversalClient
 }
 
-func NewNetworkWriter(dstHost net.IP, dstPort layers.TCPPort) *NetworkWriter {
-	return &NetworkWriter{dstHost: dstHost, dstPort: dstPort}
+func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
+	return &NetworkWriter{address: address, cluster: cluster}
 }
 
 func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
 	if w.client == nil {
-		addr := fmt.Sprintf("%s:%d", w.dstHost.String(), w.dstPort)
-		w.client = redis.NewClient(&redis.Options{
-			Addr: addr,
-		})
+		if w.cluster {
+			w.client = redis.NewClusterClient(&redis.ClusterOptions{
+				Addrs: strings.Split(w.address, ","),
+			})
+		} else {
+			w.client = redis.NewClient(&redis.Options{
+				Addr: w.address,
+			})
+		}
 	}
 
 	var s *bytes.Buffer

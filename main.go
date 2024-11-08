@@ -13,19 +13,20 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 )
 
 var (
-	localHost    = flag.String("h", "", "monitor listened ip")
-	localPort    = flag.Int("p", 8003, "monitor listened port")
-	protocol     = flag.String("P", "redis", "protocol, eg:redis")
-	outFile      = flag.String("file", "", "save to file")
-	replayTarget = flag.String("remote", "", "replay to remote service")
-
-	snapshotLen int32 = 1500
+	localHost = flag.String("h", "", "monitor listened ip")
+	localPort = flag.Int("p", 8003, "monitor listened port")
+	protocol  = flag.String("P", "redis", "protocol, eg:redis")
+	output    = flag.String("o", "default", `output target, The format is <type>:<params>.
+type: default/file/single/cluster...
+- default: output to stdout
+- file: output to file, params is file name, eg: file:out.txt
+- single: output to single redis, params is redis address, eg: single:127.0.0.1:8003
+- cluster： output to redis cluster, params is cluster address, eg: cluster:127.0.0.1:8003,127.0.0.2:8003`)
 )
 
 func main() {
@@ -44,7 +45,7 @@ func main() {
 
 	for _, device := range devices {
 		// Open device
-		handle, err := pcap.OpenLive(device.Name, snapshotLen, false, -1*time.Second)
+		handle, err := pcap.OpenLive(device.Name, 1500, false, -1*time.Second)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -60,30 +61,33 @@ func main() {
 		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(packets)})
 	}
 
+	tmp := strings.Split(*output, ":")
+	outputType := tmp[0]
 	var wr common.Writer
 	switch *protocol {
 	case "redis":
-		if len(*replayTarget) > 0 {
-			tmp := strings.Split(*replayTarget, ":")
+		switch outputType {
+		case "single":
 			if len(tmp) != 2 {
-				log.Fatal("replay target error")
+				log.Fatalf("No address specified")
 			}
-			port, err := strconv.Atoi(tmp[1])
+			wr = redis.NewNetworkWriter(tmp[1], false)
+		case "cluster":
+			if len(tmp) != 2 {
+				log.Fatalf("No address specified")
+			}
+			wr = redis.NewNetworkWriter(tmp[1], true)
+		case "default":
+			wr = redis.NewFileWriter(os.Stdout)
+		case "file":
+			if len(tmp) != 2 {
+				log.Fatalf("No file name specified")
+			}
+			f, err := os.OpenFile(tmp[1], os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0544)
 			if err != nil {
 				log.Fatal(err)
 			}
-			wr = redis.NewNetworkWriter(net.ParseIP(tmp[0]), layers.TCPPort(port))
-		} else {
-			var f *os.File
-			if len(*outFile) == 0 {
-				f = os.Stdout
-			} else {
-				f, err := os.OpenFile(*outFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0544)
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer f.Close()
-			}
+			defer f.Close()
 			wr = redis.NewFileWriter(f)
 		}
 	}
