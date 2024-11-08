@@ -47,18 +47,26 @@ func main() {
 		// Open device
 		handle, err := pcap.OpenLive(device.Name, 1500, false, -1*time.Second)
 		if err != nil {
-			log.Fatal(err)
-		}
-		err = handle.SetBPFFilter(filter)
-		if err != nil {
-			log.Fatal(err)
+			log.Printf("[error]listen %s fail, err:%s\n", device.Name, err)
+			continue
 		}
 		defer handle.Close()
+
+		err = handle.SetBPFFilter(filter)
+		if err != nil {
+			log.Printf("[error]listen %s fail, err:%s\n", device.Name, err)
+			continue
+		}
 
 		// Use the handle as a packet source to process all packets
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		packets := packetSource.Packets()
 		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(packets)})
+		log.Printf("listening %s\n", device.Name)
+	}
+
+	if len(cases) == 0 {
+		log.Fatal("no device available")
 	}
 
 	var outputType string
