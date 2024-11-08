@@ -12,7 +12,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 )
@@ -35,39 +34,16 @@ func main() {
 	//tcp and host 10.177.26.250 and port 8003
 	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
 
-	// 得到所有的(网络)设备
-	devices, err := pcap.FindAllDevs()
+	// Open device
+	handle, err := pcap.OpenLive("any", 1500, false, -1*time.Second)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	var cases []reflect.SelectCase
-
-	for _, device := range devices {
-		// Open device
-		handle, err := pcap.OpenLive(device.Name, 1500, false, -1*time.Second)
-		if err != nil {
-			log.Printf("[error]listen %s fail, err:%s\n", device.Name, err)
-			continue
-		}
-		defer handle.Close()
-
-		err = handle.SetBPFFilter(filter)
-		if err != nil {
-			log.Printf("[error]listen %s fail, err:%s\n", device.Name, err)
-			continue
-		}
-
-		// Use the handle as a packet source to process all packets
-		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-		packets := packetSource.Packets()
-		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(packets)})
-		log.Printf("listening %s\n", device.Name)
+	err = handle.SetBPFFilter(filter)
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	if len(cases) == 0 {
-		log.Fatal("no device available")
-	}
+	defer handle.Close()
 
 	var outputType string
 	var outputParams string
@@ -110,6 +86,10 @@ func main() {
 		}
 	}
 
+	// Use the handle as a packet source to process all packets
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	packets := packetSource.Packets()
+
 	eg := errgroup.Group{}
 	const threads = 100 // for 20w/s
 	for i := 0; i < threads; i++ {
@@ -121,11 +101,13 @@ func main() {
 				monitor.SetWriter(wr)
 			}
 			for {
-				_, packet, ok := reflect.Select(cases)
-				if !ok {
-					return nil
+				select {
+				case packet, ok := <-packets:
+					if !ok {
+						return nil
+					}
+					monitor.Feed(packet)
 				}
-				monitor.Feed(packet.Interface().(gopacket.Packet))
 			}
 		})
 	}
