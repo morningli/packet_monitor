@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -30,24 +31,34 @@ var (
 func main() {
 	flag.Parse()
 
-	host := net.ParseIP(*localHost)
-	device, ok := findDevice(host)
-	if !ok {
-		log.Fatal("cannot find device relate to host")
-	}
 	//tcp and host 10.177.26.250 and port 8003
 	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
 
-	// Open device
-	handle, err := pcap.OpenLive(device.Name, snapshotLen, false, -1*time.Second)
+	// 得到所有的(网络)设备
+	devices, err := pcap.FindAllDevs()
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = handle.SetBPFFilter(filter)
-	if err != nil {
-		log.Fatal(err)
+
+	var cases []reflect.SelectCase
+
+	for _, device := range devices {
+		// Open device
+		handle, err := pcap.OpenLive(device.Name, snapshotLen, false, -1*time.Second)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = handle.SetBPFFilter(filter)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer handle.Close()
+
+		// Use the handle as a packet source to process all packets
+		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+		packets := packetSource.Packets()
+		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(packets)})
 	}
-	defer handle.Close()
 
 	var wr common.Writer
 	switch *protocol {
@@ -77,10 +88,6 @@ func main() {
 		}
 	}
 
-	// Use the handle as a packet source to process all packets
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	packets := packetSource.Packets()
-
 	eg := errgroup.Group{}
 	const threads = 100 // for 20w/s
 	for i := 0; i < threads; i++ {
@@ -88,17 +95,15 @@ func main() {
 			var monitor common.Monitor = &common.DefaultMonitor{}
 			switch *protocol {
 			case "redis":
-				monitor = redis.NewMonitor(host, layers.TCPPort(*localPort))
+				monitor = redis.NewMonitor(net.ParseIP(*localHost), layers.TCPPort(*localPort))
 				monitor.SetWriter(wr)
 			}
 			for {
-				select {
-				case packet, ok := <-packets:
-					if !ok {
-						return nil
-					}
-					monitor.Feed(packet)
+				_, packet, ok := reflect.Select(cases)
+				if !ok {
+					return nil
 				}
+				monitor.Feed(packet.Interface().(gopacket.Packet))
 			}
 		})
 	}
