@@ -8,10 +8,12 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/morningli/packet_monitor/pkg/common"
 	"github.com/morningli/packet_monitor/pkg/redis"
+	_ "go.uber.org/automaxprocs"
 	"golang.org/x/sync/errgroup"
 	"log"
 	"net"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -29,6 +31,8 @@ type: default/file/single/cluster...
 )
 
 func main() {
+	debug.SetGCPercent(2000)
+
 	flag.Parse()
 
 	//tcp and host 10.177.26.250 and port 8003
