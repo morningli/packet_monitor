@@ -78,9 +78,14 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 				break
 			}
 			b.len = int(size) + 2
+			b.token = nil
 			b.state = stateBulkData
 		case stateBulkData:
-			tmp := make([]byte, 128)
+			size := 128
+			if size > b.len {
+				size = b.len
+			}
+			tmp := make([]byte, size)
 			n, err := b.data.Read(tmp)
 			if err != nil {
 				return nil
@@ -96,11 +101,11 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 			}
 
 			b.size--
-			b.ret = append(b.ret, b.token)
+			b.ret = append(b.ret, b.token[:len(b.token)-2])
 			b.token = nil
 
 			if b.size != 0 {
-				b.state = stateBulkLen
+				b.state = stateBulkLenPre
 			} else {
 				b.state = stateType
 				ret = b.ret
