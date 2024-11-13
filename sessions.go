@@ -52,7 +52,7 @@ func (s *Session) AddPacket(packet gopacket.Packet) {
 		if !tcp.PSH {
 			return
 		}
-		if s.nextSeq > tcp.Seq {
+		if s.nextSeq >= tcp.Seq {
 			// expired packet
 			return
 		}

@@ -1,16 +1,13 @@
 package redis
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/morningli/packet_monitor/pkg/common"
 	"github.com/redis/go-redis/v9"
-	"github.com/tidwall/resp"
 	"golang.org/x/sync/errgroup"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -91,48 +88,32 @@ func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byt
 		}
 	}
 
-	var s *bytes.Buffer
+	var s *RespBuffer
 	if _s, ok := w.sessions.Load(common.RemoteKey(srcHost, srcPort)); !ok {
-		s = &bytes.Buffer{}
+		s = &RespBuffer{}
 		_s, loaded := w.sessions.LoadOrStore(common.RemoteKey(srcHost, srcPort), s)
 		if loaded {
-			s = _s.(*bytes.Buffer)
+			s = _s.(*RespBuffer)
 		}
 	} else {
-		s = _s.(*bytes.Buffer)
+		s = _s.(*RespBuffer)
 	}
-
-	_, err := s.Write(data)
-	if err != nil {
-		log.Fatal(err)
-	}
+	s.Feed(data)
 
 	eg := errgroup.Group{}
-	rd := resp.NewReader(s)
 	for {
-		v, _, err := rd.ReadValue()
-		if err == io.EOF {
+		args := s.TryFetch()
+		if args == nil {
 			break
 		}
-		if err != nil {
-			log.Fatal(err)
-		}
 
-		if v.Type() == resp.Array {
-			var args []interface{}
-			for _, v := range v.Array() {
-				if v.Type() == resp.BulkString {
-					args = append(args, v.Bytes())
-				}
+		eg.Go(func() error {
+			err := w.client.Do(context.Background(), args...).Err()
+			if err != nil {
+				log.Printf("excute command fail.args:%+v,err:%s\n", args, err)
 			}
-			eg.Go(func() error {
-				err := w.client.Do(context.Background(), args...).Err()
-				if err != nil {
-					log.Printf("excute command fail.args:%+v,err:%s\n", args, err)
-				}
-				return nil
-			})
-		}
+			return nil
+		})
 	}
 	_ = eg.Wait()
 	return nil
@@ -148,29 +129,22 @@ func NewFileWriter(f *os.File) *FileWriter {
 }
 
 func (w *FileWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
-	var s *bytes.Buffer
+	var s *RespBuffer
 	if _s, ok := w.sessions.Load(common.RemoteKey(srcHost, srcPort)); !ok {
-		s = &bytes.Buffer{}
+		s = &RespBuffer{}
 		_s, loaded := w.sessions.LoadOrStore(common.RemoteKey(srcHost, srcPort), s)
 		if loaded {
-			s = _s.(*bytes.Buffer)
+			s = _s.(*RespBuffer)
 		}
 	} else {
-		s = _s.(*bytes.Buffer)
+		s = _s.(*RespBuffer)
 	}
+	s.Feed(data)
 
-	_, err := s.Write(data)
-	if err != nil {
-		log.Fatal(err)
-	}
-	rd := resp.NewReader(s)
 	for {
-		v, _, err := rd.ReadValue()
-		if err == io.EOF {
+		args := s.TryFetch()
+		if args == nil {
 			break
-		}
-		if err != nil {
-			log.Fatal(err)
 		}
 
 		buff := strings.Builder{}
@@ -181,16 +155,13 @@ func (w *FileWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) 
 		buff.WriteString(srcPort.String())
 		buff.WriteString("]")
 
-		if v.Type() == resp.Array {
-			for _, v := range v.Array() {
-				if v.Type() == resp.BulkString {
-					buff.WriteString(" \"")
-					buff.Write(v.Bytes())
-					buff.WriteString("\"")
-				}
-			}
+		for _, v := range args {
+			buff.WriteString(" \"")
+			buff.Write(v.([]byte))
+			buff.WriteString("\"")
 		}
-		_, err = fmt.Fprintln(w.f, buff.String())
+
+		_, err := fmt.Fprintln(w.f, buff.String())
 		if err != nil {
 			log.Fatal(err)
 		}
