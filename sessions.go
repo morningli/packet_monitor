@@ -7,6 +7,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"net"
 	"sync"
+	"time"
 )
 
 type State int
@@ -23,11 +24,12 @@ const (
 )
 
 type Session struct {
-	localHost net.IP
-	localPort layers.TCPPort
-	nextSeq   uint32
-	packets   *rbt.Tree
-	mux       sync.Mutex
+	localHost   net.IP
+	localPort   layers.TCPPort
+	nextSeq     uint32
+	packets     *rbt.Tree
+	mux         sync.Mutex
+	lastSuccess time.Time
 }
 
 func NewSession(localHost net.IP, localPort layers.TCPPort) *Session {
@@ -52,7 +54,7 @@ func (s *Session) AddPacket(packet gopacket.Packet) {
 		if !tcp.PSH {
 			return
 		}
-		if s.nextSeq >= tcp.Seq {
+		if s.nextSeq > tcp.Seq {
 			// expired packet
 			return
 		}
@@ -72,7 +74,7 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 		ok = false
 		return
 	}
-	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq {
+	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || time.Since(s.lastSuccess) > time.Second*20 {
 		packet = s.packets.Left().Value.(gopacket.Packet)
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		if tcpLayer == nil {
@@ -83,6 +85,7 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 		s.nextSeq = tcp.Seq + uint32(len(tcp.Payload))
 		s.packets.Remove(tcp.Seq)
 		ok = true
+		s.lastSuccess = time.Now()
 	}
 	return
 }

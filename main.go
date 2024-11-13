@@ -40,7 +40,7 @@ func main() {
 	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
 
 	// Open device
-	handle, err := pcap.OpenLive("any", 1500, false, -1*time.Second)
+	handle, err := pcap.OpenLive("any", 128*1024, false, -1*time.Second)
 	if err != nil {
 		log.Fatal(err)
 	}
