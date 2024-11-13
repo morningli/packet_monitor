@@ -3,6 +3,7 @@ module github.com/morningli/packet_monitor
 go 1.17
 
 require (
+	github.com/emirpasic/gods v1.18.1
 	github.com/google/gopacket v1.1.19
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/tidwall/resp v0.1.1

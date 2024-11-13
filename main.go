@@ -95,6 +95,8 @@ func main() {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	packets := packetSource.Packets()
 
+	sessions := NewSessionMgr(net.ParseIP(*localHost), layers.TCPPort(*localPort))
+
 	eg := errgroup.Group{}
 	for i := 0; i < *workerNum; i++ {
 		eg.Go(func() error {
@@ -104,13 +106,14 @@ func main() {
 				monitor = redis.NewMonitor(net.ParseIP(*localHost), layers.TCPPort(*localPort))
 				monitor.SetWriter(wr)
 			}
+			sessions.SetMonitor(monitor)
 			for {
 				select {
 				case packet, ok := <-packets:
 					if !ok {
 						return nil
 					}
-					monitor.Feed(packet)
+					sessions.PacketArrive(packet)
 				}
 			}
 		})
