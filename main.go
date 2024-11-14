@@ -36,7 +36,7 @@ type: default/file/single/cluster...
 )
 
 func main() {
-	debug.SetGCPercent(2000)
+	debug.SetGCPercent(400)
 
 	flag.Parse()
 
