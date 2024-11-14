@@ -17,7 +17,6 @@ type Session struct {
 	packets     *rbt.Tree
 	mux         sync.Mutex
 	lastSuccess time.Time
-	window      uint16
 }
 
 func NewSession(localHost net.IP, localPort layers.TCPPort) *Session {
@@ -43,7 +42,7 @@ func (s *Session) AddPacket(packet gopacket.Packet) {
 			// expired packet
 			return
 		}
-		if len(tcp.Payload) == 0 && tcp.Window == s.window {
+		if len(tcp.Payload) == 0 {
 			return
 		}
 	}
@@ -76,14 +75,6 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 			return
 		}
 
-		if tcp.Window != s.window && len(tcp.Payload) == 0 {
-			s.window = tcp.Window
-			s.nextSeq = tcp.Seq + 1
-			s.packets.Remove(tcp.Seq)
-			return
-		}
-
-		s.window = tcp.Window
 		s.nextSeq = tcp.Seq + uint32(len(tcp.Payload))
 		s.packets.Remove(tcp.Seq)
 		ok = true
