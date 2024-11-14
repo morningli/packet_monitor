@@ -7,6 +7,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/morningli/packet_monitor/pkg/common"
+	"github.com/morningli/packet_monitor/pkg/raw"
 	"github.com/morningli/packet_monitor/pkg/redis"
 	_ "go.uber.org/automaxprocs"
 	"golang.org/x/sync/errgroup"
@@ -21,7 +22,7 @@ import (
 var (
 	localHost = flag.String("h", "", "monitor listened ip")
 	localPort = flag.Int("p", 8003, "monitor listened port")
-	protocol  = flag.String("P", "redis", "protocol, eg:redis")
+	protocol  = flag.String("P", "redis", "protocol, eg:redis/raw")
 	output    = flag.String("o", "default", `output target, The format is <type>:<params>.
 type: default/file/single/cluster...
 - default: output to stdout
@@ -52,21 +53,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var outputType string
-	var outputParams string
-	pos := strings.Index(*output, ":")
-	if pos == -1 {
-		outputType = *output
-	} else {
-		outputType = (*output)[:pos]
-		if pos != len(*output)-1 {
-			outputParams = (*output)[pos+1:]
-		}
-	}
-
 	var wr common.Writer
 	switch *protocol {
 	case "redis":
+		var outputType string
+		var outputParams string
+		pos := strings.Index(*output, ":")
+		if pos == -1 {
+			outputType = *output
+		} else {
+			outputType = (*output)[:pos]
+			if pos != len(*output)-1 {
+				outputParams = (*output)[pos+1:]
+			}
+		}
 		switch outputType {
 		case "single":
 			if len(outputParams) == 0 {
@@ -102,11 +102,15 @@ func main() {
 	eg := errgroup.Group{}
 	for i := 0; i < *workerNum; i++ {
 		eg.Go(func() error {
-			var monitor common.Monitor = &common.DefaultMonitor{}
+			var monitor common.Monitor
 			switch *protocol {
 			case "redis":
 				monitor = redis.NewMonitor(net.ParseIP(*localHost), layers.TCPPort(*localPort))
 				monitor.SetWriter(wr)
+			case "raw":
+				monitor = &raw.Monitor{}
+			default:
+				log.Fatalf("no protocol found")
 			}
 			sessions.SetMonitor(monitor)
 
