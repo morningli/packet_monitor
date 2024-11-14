@@ -57,6 +57,13 @@ func (m *Monitor) Feed(packet gopacket.Packet) {
 		flags = append(flags, "NS")
 	}
 
-	log.Printf("[%s:%s->%s:%s][%s][SEQ=%d ACK=%d WIN=%d LEN=%d]",
-		ip.SrcIP, tcp.SrcPort, ip.DstIP, tcp.DstPort, strings.Join(flags, ","), tcp.Seq, tcp.Ack, tcp.Window, len(tcp.Payload))
+	var nextSeq uint32
+	if tcp.SYN {
+		nextSeq = tcp.Seq + 1
+	} else {
+		nextSeq = tcp.Seq + uint32(len(tcp.Payload))
+	}
+
+	log.Printf("[%s:%s->%s:%s][%s][SEQ=%d:%d ACK=%d WIN=%d LEN=%d]",
+		ip.SrcIP, tcp.SrcPort, ip.DstIP, tcp.DstPort, strings.Join(flags, ","), tcp.Seq, nextSeq, tcp.Ack, tcp.Window, len(tcp.Payload))
 }
