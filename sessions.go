@@ -42,6 +42,9 @@ func (s *Session) AddPacket(packet gopacket.Packet) {
 			// expired packet
 			return
 		}
+		if len(tcp.Payload) == 0 {
+			return
+		}
 	}
 
 	// out
