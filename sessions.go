@@ -68,7 +68,7 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 		ok = false
 		return
 	}
-	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || time.Since(s.lastSuccess) > time.Millisecond*200 {
+	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || s.packets.Size() > 20 {
 		if s.nextSeq > 0 && s.nextSeq != s.packets.Left().Key {
 			atomic.AddUint64(&packetsMiss, 1)
 		}
@@ -89,7 +89,7 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 		s.nextSeq = tcp.Seq + uint32(len(tcp.Payload))
 		s.packets.Remove(tcp.Seq)
 		ok = true
-		s.lastSuccess = time.Now()
+		//s.lastSuccess = time.Now()
 	}
 	return
 }
