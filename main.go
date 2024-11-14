@@ -16,7 +16,6 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
-	"time"
 )
 
 var (
@@ -31,6 +30,7 @@ type: default/file/single/cluster...
 - cluster： output to redis cluster, params is cluster address, eg: cluster:127.0.0.1:8003,127.0.0.2:8003`)
 	workerNum = flag.Int("worker-num", 10, "worker number")
 	interf    = flag.String("i", "any", "network interface")
+	buffSize  = flag.Int("B", 256<<20, "buffer size")
 )
 
 func main() {
@@ -42,7 +42,33 @@ func main() {
 	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
 
 	// Open device
-	handle, err := pcap.OpenLive(*interf, 256*1024, false, -1*time.Second)
+	inactive, err := pcap.NewInactiveHandle(*interf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer inactive.CleanUp()
+
+	err = inactive.SetBufferSize(*buffSize)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = inactive.SetImmediateMode(true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = inactive.SetPromisc(false)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = inactive.SetTimeout(-1)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = inactive.SetSnapLen(256 * 1024)
+	if err != nil {
+		log.Fatal(err)
+	}
+	handle, err := inactive.Activate()
 	if err != nil {
 		log.Fatal(err)
 	}
