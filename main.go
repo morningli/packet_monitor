@@ -41,7 +41,7 @@ func main() {
 	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
 
 	// Open device
-	handle, err := pcap.OpenLive(*interf, 256*1024, false, time.Second*30)
+	handle, err := pcap.OpenLive(*interf, 256*1024, false, -1*time.Second)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,8 +94,7 @@ func main() {
 
 	// Use the handle as a packet source to process all packets
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	packets := make(chan gopacket.Packet, 1000)
-	go packetsToChannel(packetSource, packets)
+	packets := packetSource.Packets()
 
 	sessions := NewSessionMgr(net.ParseIP(*localHost), layers.TCPPort(*localPort))
 
