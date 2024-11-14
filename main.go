@@ -29,6 +29,7 @@ type: default/file/single/cluster...
 - single: output to single redis, params is redis address, eg: single:127.0.0.1:8003
 - cluster： output to redis cluster, params is cluster address, eg: cluster:127.0.0.1:8003,127.0.0.2:8003`)
 	workerNum = flag.Int("worker-num", 10, "worker number")
+	interf    = flag.String("i", "any", "network interface")
 )
 
 func main() {
@@ -40,7 +41,7 @@ func main() {
 	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
 
 	// Open device
-	handle, err := pcap.OpenLive("any", 256*1024, false, time.Second*30)
+	handle, err := pcap.OpenLive(*interf, 256*1024, false, time.Second*30)
 	if err != nil {
 		log.Fatal(err)
 	}
