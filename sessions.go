@@ -53,7 +53,7 @@ func (s *Session) AddPacket(packet gopacket.Packet) {
 		return
 	}
 
-	if _, ok := s.packets.Get(tcp.Seq); ok {
+	if _, ok := s.packets.Get(tcp.Seq); !ok {
 		s.packets.Put(tcp.Seq, packet)
 	}
 }
