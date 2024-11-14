@@ -44,10 +44,6 @@ func (r *Monitor) Feed(packet gopacket.Packet) {
 	}
 	tcp, _ := tcpLayer.(*layers.TCP)
 
-	if !tcp.PSH {
-		return
-	}
-
 	if ip.SrcIP.Equal(r.localHost) && tcp.SrcPort == r.localPort {
 		// TODO packet out，ignore
 		return
