@@ -16,6 +16,8 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 var (
@@ -124,6 +126,13 @@ func main() {
 	packets := packetSource.Packets()
 
 	sessions := NewSessionMgr(net.ParseIP(*localHost), layers.TCPPort(*localPort))
+
+	go func() {
+		for {
+			time.Sleep(time.Second * 30)
+			log.Printf("[Stats]miss:%d", atomic.LoadUint64(&packetsMiss))
+		}
+	}()
 
 	eg := errgroup.Group{}
 	for i := 0; i < *workerNum; i++ {

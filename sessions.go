@@ -7,7 +7,12 @@ import (
 	"github.com/google/gopacket/layers"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
+)
+
+var (
+	packetsMiss uint64
 )
 
 type Session struct {
@@ -63,7 +68,11 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 		ok = false
 		return
 	}
-	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || time.Since(s.lastSuccess) > time.Second*20 {
+	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || time.Since(s.lastSuccess) > time.Millisecond*50 {
+		if s.nextSeq > 0 && s.nextSeq != s.packets.Left().Key {
+			atomic.AddUint64(&packetsMiss, 1)
+		}
+
 		packet = s.packets.Left().Value.(gopacket.Packet)
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		if tcpLayer == nil {
