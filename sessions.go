@@ -5,6 +5,7 @@ import (
 	"github.com/emirpasic/gods/utils"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,8 @@ var (
 )
 
 type Session struct {
+	remoteHost  net.IP
+	remotePort  layers.TCPPort
 	localHost   net.IP
 	localPort   layers.TCPPort
 	nextSeq     uint32
@@ -24,8 +27,13 @@ type Session struct {
 	lastSuccess time.Time
 }
 
-func NewSession(localHost net.IP, localPort layers.TCPPort) *Session {
-	return &Session{localHost: localHost, localPort: localPort, packets: rbt.NewWith(utils.UInt32Comparator)}
+func NewSession(localHost net.IP, localPort layers.TCPPort, remoteHost net.IP, remotePort layers.TCPPort) *Session {
+	return &Session{
+		localHost:  localHost,
+		localPort:  localPort,
+		remoteHost: remoteHost,
+		remotePort: remotePort,
+		packets:    rbt.NewWith(utils.UInt32Comparator)}
 }
 
 func (s *Session) AddPacket(packet gopacket.Packet) {
@@ -70,6 +78,8 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 	}
 	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || s.packets.Size() > 20 {
 		if s.nextSeq > 0 && s.nextSeq != s.packets.Left().Key {
+			log.Printf("%s:%s->%s:%s expect %d but %d",
+				s.remoteHost.String(), s.remotePort.String(), s.localHost.String(), s.localPort.String(), s.nextSeq, s.packets.Left().Key)
 			atomic.AddUint64(&packetsMiss, 1)
 		}
 

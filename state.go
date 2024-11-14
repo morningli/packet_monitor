@@ -38,7 +38,11 @@ func (s *SessionMgr) PacketArrive(packet gopacket.Packet) {
 	}
 	tcp, _ := tcpLayer.(*layers.TCP)
 
-	var key string
+	var (
+		key        string
+		remoteHost net.IP
+		remotePort layers.TCPPort
+	)
 
 	if ip.SrcIP.Equal(s.localHost) && tcp.SrcPort == s.localPort {
 		// out
@@ -54,11 +58,13 @@ func (s *SessionMgr) PacketArrive(packet gopacket.Packet) {
 			s.sessions.Delete(key)
 			return
 		}
+		remoteHost = ip.SrcIP
+		remotePort = tcp.SrcPort
 	} else {
 		return
 	}
 
-	session := NewSession(s.localHost, s.localPort)
+	session := NewSession(s.localHost, s.localPort, remoteHost, remotePort)
 	tmp, loaded := s.sessions.LoadOrStore(key, session)
 	if loaded {
 		session = tmp.(*Session)
