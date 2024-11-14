@@ -20,6 +20,9 @@ replay requests on other nodes
     ./packet_monitor -h <redis-host> -p <redis-port> -o single:<remote-host>:<remote-port>
     ./packet_monitor -h <redis-host> -p <redis-port> -o cluster:<remote-host>:<remote-port>,<remote-host>:<remote-port>    
 
+print packets only
+
+    ./packet_monitor -h <redis-host> -p <redis-port> -P raw
 
 ## build 
 
