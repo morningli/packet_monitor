@@ -45,11 +45,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer handle.Close()
+
 	err = handle.SetBPFFilter(filter)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer handle.Close()
 
 	var outputType string
 	var outputParams string
