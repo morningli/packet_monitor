@@ -3,6 +3,7 @@ package redis
 import (
 	"bytes"
 	"io"
+	"log"
 	"strconv"
 )
 
@@ -34,6 +35,10 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 	for {
 		switch b.state {
 		case stateType:
+			b.size = 0
+			b.len = 0
+			b.token = nil
+			b.ret = nil
 			t, err := b.data.ReadByte()
 			if err == io.EOF {
 				return nil
@@ -50,6 +55,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 			}
 			size, err := strconv.ParseInt(string(b.token[:len(b.token)-2]), 10, 64)
 			if err != nil {
+				log.Printf("parse bulk size fail:%s", string(b.token[:len(b.token)-2]))
 				b.state = stateType
 				break
 			}
@@ -62,6 +68,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 				return nil
 			}
 			if t != '$' {
+				log.Printf("parse bulk len pre fail:%s", string(t))
 				b.state = stateType
 				break
 			}
@@ -74,6 +81,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 			}
 			size, err := strconv.ParseInt(string(b.token[:len(b.token)-2]), 10, 64)
 			if err != nil {
+				log.Printf("parse bulk len fail:%s", string(b.token[:len(b.token)-2]))
 				b.state = stateType
 				break
 			}
@@ -96,6 +104,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 				break
 			}
 			if b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
+				log.Printf("parse bulk data fail:%s", string(b.token[len(b.token)-2:]))
 				b.state = stateType
 				break
 			}
