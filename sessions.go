@@ -10,19 +10,6 @@ import (
 	"time"
 )
 
-type State int
-
-const (
-	SYN_RECVD = iota
-	ESTABLISHED
-	FIN_WAIT_1
-	FIN_WAIT_2
-	CLOSING
-	TIME_WAIT
-	CLOSE_WAIT
-	LAST_ACK
-)
-
 type Session struct {
 	localHost   net.IP
 	localPort   layers.TCPPort
@@ -51,9 +38,6 @@ func (s *Session) AddPacket(packet gopacket.Packet) {
 
 	// in
 	if ip.DstIP.Equal(s.localHost) && tcp.DstPort == s.localPort {
-		if !tcp.PSH {
-			return
-		}
 		if s.nextSeq > tcp.Seq {
 			// expired packet
 			return
@@ -78,10 +62,16 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 		packet = s.packets.Left().Value.(gopacket.Packet)
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		if tcpLayer == nil {
-			ok = false
 			return
 		}
 		tcp, _ := tcpLayer.(*layers.TCP)
+
+		if tcp.SYN {
+			s.nextSeq = tcp.Seq + 1
+			s.packets.Remove(tcp.Seq)
+			return
+		}
+
 		s.nextSeq = tcp.Seq + uint32(len(tcp.Payload))
 		s.packets.Remove(tcp.Seq)
 		ok = true
