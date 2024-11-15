@@ -9,9 +9,9 @@ import (
 	"github.com/morningli/packet_monitor/pkg/common"
 	"github.com/morningli/packet_monitor/pkg/raw"
 	"github.com/morningli/packet_monitor/pkg/redis"
+	log "github.com/sirupsen/logrus"
 	_ "go.uber.org/automaxprocs"
 	"golang.org/x/sync/errgroup"
-	"log"
 	"net"
 	"os"
 	"runtime/debug"
@@ -33,6 +33,7 @@ type: default/file/single/cluster...
 	workerNum = flag.Int("worker-num", 10, "worker number")
 	interf    = flag.String("i", "any", "network interface")
 	buffSize  = flag.Int("B", 256<<20, "buffer size")
+	logLevel  = flag.String("log-level", "info", "log level,trace/debug/info/warn/error/fatal/panic")
 )
 
 func main() {
@@ -40,8 +41,11 @@ func main() {
 
 	flag.Parse()
 
-	//tcp and host 10.177.26.250 and port 8003
-	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
+	lvl, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetLevel(lvl)
 
 	// Open device
 	inactive, err := pcap.NewInactiveHandle(*interf)
@@ -76,6 +80,7 @@ func main() {
 	}
 	defer handle.Close()
 
+	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
 	err = handle.SetBPFFilter(filter)
 	if err != nil {
 		log.Fatal(err)
@@ -130,7 +135,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Second * 300)
-			log.Printf("[Stats]process:%d,miss:%d", atomic.LoadUint64(&packetsProcess), atomic.LoadUint64(&packetsMiss))
+			log.Infof("[Stats]process:%d,miss:%d", atomic.LoadUint64(&packetsProcess), atomic.LoadUint64(&packetsMiss))
 		}
 	}()
 

@@ -7,8 +7,8 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/morningli/packet_monitor/pkg/common"
 	"github.com/redis/go-redis/v9"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -106,7 +106,7 @@ func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byt
 		eg.Go(func() error {
 			err := w.client.Do(context.Background(), args...).Err()
 			if err != nil {
-				log.Printf("excute command fail.args:%+v,err:%s\n", args, err)
+				log.Errorf("execute command fail.args:%+v,err:%s", args, err)
 			}
 			return nil
 		})

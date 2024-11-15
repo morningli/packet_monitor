@@ -4,7 +4,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/morningli/packet_monitor/pkg/common"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"strings"
 )
 

@@ -2,8 +2,8 @@ package redis
 
 import (
 	"bytes"
+	log "github.com/sirupsen/logrus"
 	"io"
-	"log"
 	"strconv"
 )
 
@@ -55,7 +55,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 			}
 			size, err := strconv.ParseInt(string(b.token[:len(b.token)-2]), 10, 64)
 			if err != nil {
-				log.Printf("parse bulk size fail:%s", string(b.token[:len(b.token)-2]))
+				log.Errorf("parse bulk size fail:%s", string(b.token[:len(b.token)-2]))
 				b.state = stateType
 				break
 			}
@@ -68,7 +68,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 				return nil
 			}
 			if t != '$' {
-				log.Printf("parse bulk len pre fail:%s", string(t))
+				log.Errorf("parse bulk len pre fail:%s", string(t))
 				b.state = stateType
 				break
 			}
@@ -81,7 +81,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 			}
 			size, err := strconv.ParseInt(string(b.token[:len(b.token)-2]), 10, 64)
 			if err != nil {
-				log.Printf("parse bulk len fail:%s", string(b.token[:len(b.token)-2]))
+				log.Errorf("parse bulk len fail:%s", string(b.token[:len(b.token)-2]))
 				b.state = stateType
 				break
 			}
@@ -104,7 +104,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 				break
 			}
 			if b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
-				log.Printf("parse bulk data fail:%s", string(b.token[len(b.token)-2:]))
+				log.Errorf("parse bulk data fail:%s", string(b.token[len(b.token)-2:]))
 				b.state = stateType
 				break
 			}
