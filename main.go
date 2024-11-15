@@ -129,8 +129,8 @@ func main() {
 
 	go func() {
 		for {
-			time.Sleep(time.Second * 30)
-			log.Printf("[Stats]miss:%d", atomic.LoadUint64(&packetsMiss))
+			time.Sleep(time.Second * 300)
+			log.Printf("[Stats]process:%d,miss:%d", atomic.LoadUint64(&packetsProcess), atomic.LoadUint64(&packetsMiss))
 		}
 	}()
 

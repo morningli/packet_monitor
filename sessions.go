@@ -9,22 +9,21 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 var (
-	packetsMiss uint64
+	packetsMiss    uint64
+	packetsProcess uint64
 )
 
 type Session struct {
-	remoteHost  net.IP
-	remotePort  layers.TCPPort
-	localHost   net.IP
-	localPort   layers.TCPPort
-	nextSeq     uint32
-	packets     *rbt.Tree
-	mux         sync.Mutex
-	lastSuccess time.Time
+	remoteHost net.IP
+	remotePort layers.TCPPort
+	localHost  net.IP
+	localPort  layers.TCPPort
+	nextSeq    uint32
+	packets    *rbt.Tree
+	mux        sync.Mutex
 }
 
 func NewSession(localHost net.IP, localPort layers.TCPPort, remoteHost net.IP, remotePort layers.TCPPort) *Session {
@@ -76,7 +75,7 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 		ok = false
 		return
 	}
-	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || s.packets.Size() > 20 {
+	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || s.packets.Size() > 200 {
 		if s.nextSeq > 0 && s.nextSeq != s.packets.Left().Key {
 			log.Printf("%s:%s->%s:%s expect %d but %d",
 				s.remoteHost.String(), s.remotePort.String(), s.localHost.String(), s.localPort.String(), s.nextSeq, s.packets.Left().Key)
@@ -99,7 +98,7 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 		s.nextSeq = tcp.Seq + uint32(len(tcp.Payload))
 		s.packets.Remove(tcp.Seq)
 		ok = true
-		//s.lastSuccess = time.Now()
+		atomic.AddUint64(&packetsProcess, 1)
 	}
 	return
 }
