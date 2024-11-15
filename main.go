@@ -80,8 +80,12 @@ func main() {
 	}
 	defer handle.Close()
 
-	filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
+	filter := fmt.Sprintf("tcp and dst host %s and dst port %d", *localHost, *localPort)
 	err = handle.SetBPFFilter(filter)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = handle.SetDirection(pcap.DirectionIn)
 	if err != nil {
 		log.Fatal(err)
 	}
