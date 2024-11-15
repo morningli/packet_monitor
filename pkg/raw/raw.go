@@ -1,10 +1,10 @@
 package raw
 
 import (
+	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/morningli/packet_monitor/pkg/common"
-	log "github.com/sirupsen/logrus"
 	"strings"
 )
 
@@ -64,6 +64,6 @@ func (m *Monitor) Feed(packet gopacket.Packet) {
 		nextSeq = tcp.Seq + uint32(len(tcp.Payload))
 	}
 
-	log.Printf("[%s:%s->%s:%s][%s][SEQ=%d:%d ACK=%d WIN=%d LEN=%d]",
+	fmt.Printf("[%s:%s->%s:%s][%s][SEQ=%d:%d ACK=%d WIN=%d LEN=%d]",
 		ip.SrcIP, tcp.SrcPort, ip.DstIP, tcp.DstPort, strings.Join(flags, ","), tcp.Seq, nextSeq, tcp.Ack, tcp.Window, len(tcp.Payload))
 }
