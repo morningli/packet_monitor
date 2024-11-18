@@ -2,6 +2,7 @@ package redis
 
 import (
 	"github.com/stretchr/testify/require"
+	"runtime/debug"
 	"testing"
 )
 
@@ -37,4 +38,14 @@ func TestRespBuffer_Feed(t *testing.T) {
 			}
 		}
 	})
+}
+
+func BenchmarkRespBuffer_TryFetch(b *testing.B) {
+	debug.SetGCPercent(400)
+	data := []byte("*2\r\n$3\r\nget\r\n$2\r\naa\r\n")
+	buff := &RespBuffer{}
+	for i := 0; i < b.N; i++ {
+		buff.Feed(data)
+		_ = buff.TryFetch()
+	}
 }
