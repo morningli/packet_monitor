@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"bytes"
 	"github.com/morningli/packet_monitor/pkg/common"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -17,9 +16,46 @@ const (
 	stateBulkData
 )
 
+type NoCopyBuffer struct {
+	buf []byte
+	off int // read at &buf[off], write at &buf[len(buf)]
+}
+
+func (b *NoCopyBuffer) Write(p []byte) (n int, err error) {
+	if !b.empty() {
+		log.Fatalf("write to not empty buffer")
+	}
+	b.buf = p
+	b.off = 0
+	return len(p), nil
+}
+
+func (b *NoCopyBuffer) empty() bool { return len(b.buf) <= b.off }
+
+func (b *NoCopyBuffer) ReadByte() (byte, error) {
+	if b.empty() {
+		return 0, io.EOF
+	}
+	c := b.buf[b.off]
+	b.off++
+	return c, nil
+}
+
+func (b *NoCopyBuffer) Read(p []byte) (n int, err error) {
+	if b.empty() {
+		if len(p) == 0 {
+			return 0, nil
+		}
+		return 0, io.EOF
+	}
+	n = copy(p, b.buf[b.off:])
+	b.off += n
+	return n, nil
+}
+
 type RespBuffer struct {
 	state stat
-	data  bytes.Buffer
+	data  NoCopyBuffer
 
 	size  int
 	len   int
@@ -28,17 +64,20 @@ type RespBuffer struct {
 }
 
 func (b *RespBuffer) Feed(data []byte) {
-	b.data.Write(data)
+	_, err := b.data.Write(data)
+	if err != nil {
+		log.Fatalf("feed data fail:%s", err)
+	}
 }
 
-func (b *RespBuffer) ReadBytes(line []byte, delim byte) (n int, err error) {
+func (b *RespBuffer) readLine(line []byte) (n int, err error) {
 	for i := 0; i < len(line); i++ {
 		d, err := b.data.ReadByte()
 		if err != nil {
 			return i, err
 		}
 		line[i] = d
-		if d == delim {
+		if d == '\n' {
 			return i + 1, nil
 		}
 	}
@@ -63,7 +102,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 			b.token = bytesInt
 			b.ret = make([]interface{}, 0, 4)
 		case stateBulkSize:
-			n, err := b.ReadBytes(b.token[b.len:], '\n')
+			n, err := b.readLine(b.token[b.len:])
 			b.len += n
 			if err == io.ErrShortBuffer {
 				log.Errorf("parse bulk size fail:%s", common.BytesToString(b.token))
@@ -96,7 +135,7 @@ func (b *RespBuffer) TryFetch() (ret []interface{}) {
 			b.token = bytesInt
 			b.len = 0
 		case stateBulkLen:
-			n, err := b.ReadBytes(b.token[b.len:], '\n')
+			n, err := b.readLine(b.token[b.len:])
 			b.len += n
 			if err == io.ErrShortBuffer {
 				log.Errorf("parse bulk size fail:%s", common.BytesToString(b.token))
