@@ -6,5 +6,6 @@ import (
 )
 
 type Writer interface {
-	Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error
+	FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error
+	FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byte) error
 }

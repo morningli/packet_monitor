@@ -51,7 +51,7 @@ func (r *Monitor) Feed(packet gopacket.Packet) {
 
 	if ip.DstIP.Equal(r.localHost) && tcp.DstPort == r.localPort {
 		if r.wr != nil {
-			err := r.wr.Write(ip.SrcIP, tcp.SrcPort, tcpLayer.LayerPayload())
+			err := r.wr.FlowIn(ip.SrcIP, tcp.SrcPort, tcpLayer.LayerPayload())
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -67,11 +67,16 @@ type NetworkWriter struct {
 	client   redis.UniversalClient
 }
 
+func (w *NetworkWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byte) error {
+	// ignore
+	return nil
+}
+
 func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
 	return &NetworkWriter{address: address, cluster: cluster}
 }
 
-func (w *NetworkWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
+func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
 	if w.client == nil {
 		if w.cluster {
 			w.client = redis.NewClusterClient(&redis.ClusterOptions{
@@ -120,11 +125,16 @@ type FileWriter struct {
 	sessions sync.Map
 }
 
+func (w *FileWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byte) error {
+	// ignore
+	return nil
+}
+
 func NewFileWriter(f *os.File) *FileWriter {
 	return &FileWriter{f: f}
 }
 
-func (w *FileWriter) Write(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
+func (w *FileWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
 	var s *RespBuffer
 	if _s, ok := w.sessions.Load(common.RemoteKey(srcHost, srcPort)); !ok {
 		s = &RespBuffer{}

@@ -28,7 +28,7 @@ func (m *Monitor) Feed(packet gopacket.Packet) {
 	}
 	tcp, _ := tcpLayer.(*layers.TCP)
 
-	flags := []string{}
+	var flags []string
 	if tcp.FIN {
 		flags = append(flags, "FIN")
 	}

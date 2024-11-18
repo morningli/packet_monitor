@@ -1,4 +1,4 @@
-package main
+package reorder
 
 import (
 	rbt "github.com/emirpasic/gods/trees/redblacktree"

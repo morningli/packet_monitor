@@ -9,6 +9,7 @@ import (
 	"github.com/morningli/packet_monitor/pkg/common"
 	"github.com/morningli/packet_monitor/pkg/raw"
 	"github.com/morningli/packet_monitor/pkg/redis"
+	"github.com/morningli/packet_monitor/pkg/reorder"
 	log "github.com/sirupsen/logrus"
 	_ "go.uber.org/automaxprocs"
 	"golang.org/x/sync/errgroup"
@@ -16,8 +17,6 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
-	"sync/atomic"
-	"time"
 )
 
 var (
@@ -134,29 +133,19 @@ func main() {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	packets := packetSource.Packets()
 
-	sessions := NewSessionMgr(net.ParseIP(*localHost), layers.TCPPort(*localPort))
-
-	go func() {
-		for {
-			time.Sleep(time.Second * 300)
-			log.Infof("[Stats]process:%d,miss:%d", atomic.LoadUint64(&packetsProcess), atomic.LoadUint64(&packetsMiss))
-		}
-	}()
-
 	eg := errgroup.Group{}
 	for i := 0; i < *workerNum; i++ {
 		eg.Go(func() error {
 			var monitor common.Monitor
 			switch *protocol {
 			case "redis":
-				monitor = redis.NewMonitor(net.ParseIP(*localHost), layers.TCPPort(*localPort))
+				monitor = reorder.NewMonitor(net.ParseIP(*localHost), layers.TCPPort(*localPort))
 				monitor.SetWriter(wr)
 			case "raw":
 				monitor = &raw.Monitor{}
 			default:
 				log.Fatalf("no protocol found")
 			}
-			sessions.SetMonitor(monitor)
 
 			for {
 				select {
@@ -164,7 +153,7 @@ func main() {
 					if !ok {
 						return nil
 					}
-					sessions.PacketArrive(packet)
+					monitor.Feed(packet)
 				}
 			}
 		})

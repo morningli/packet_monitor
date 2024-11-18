@@ -1,4 +1,4 @@
-package main
+package reorder
 
 import (
 	"fmt"
@@ -8,24 +8,67 @@ import (
 	log "github.com/sirupsen/logrus"
 	"net"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
-type SessionMgr struct {
+type Monitor struct {
 	localHost net.IP
 	localPort layers.TCPPort
 	sessions  sync.Map //Session
-	monitor   common.Monitor
+	wr        common.Writer
 }
 
-func NewSessionMgr(localHost net.IP, localPort layers.TCPPort) *SessionMgr {
-	return &SessionMgr{localHost: localHost, localPort: localPort}
+func NewMonitor(localHost net.IP, localPort layers.TCPPort) *Monitor {
+	m := &Monitor{localHost: localHost, localPort: localPort}
+	go func() {
+		for {
+			time.Sleep(time.Second * 300)
+			log.Infof("[Stats]process:%d,miss:%d", atomic.LoadUint64(&packetsProcess), atomic.LoadUint64(&packetsMiss))
+		}
+	}()
+	return m
 }
 
-func (s *SessionMgr) SetMonitor(monitor common.Monitor) {
-	s.monitor = monitor
+func (s *Monitor) SetWriter(writer common.Writer) {
+	s.wr = writer
 }
 
-func (s *SessionMgr) PacketArrive(packet gopacket.Packet) {
+func (s *Monitor) processOne(packet gopacket.Packet) {
+	ipLayer := packet.Layer(layers.LayerTypeIPv4)
+	if ipLayer == nil {
+		return
+	}
+	ip, _ := ipLayer.(*layers.IPv4)
+
+	tcpLayer := packet.Layer(layers.LayerTypeTCP)
+	if tcpLayer == nil {
+		return
+	}
+	tcp, _ := tcpLayer.(*layers.TCP)
+
+	if ip.SrcIP.Equal(s.localHost) && tcp.SrcPort == s.localPort {
+		if s.wr != nil {
+			err := s.wr.FlowOut(ip.DstIP, tcp.DstPort, tcpLayer.LayerPayload())
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		return
+	}
+
+	if ip.DstIP.Equal(s.localHost) && tcp.DstPort == s.localPort {
+		if s.wr != nil {
+			err := s.wr.FlowIn(ip.SrcIP, tcp.SrcPort, tcpLayer.LayerPayload())
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		return
+	}
+}
+
+func (s *Monitor) Feed(packet gopacket.Packet) {
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	if ipLayer == nil {
 		return
@@ -80,9 +123,7 @@ func (s *SessionMgr) PacketArrive(packet gopacket.Packet) {
 		if !ok {
 			break
 		}
-		if s.monitor != nil {
-			s.monitor.Feed(packet)
-		}
+		s.processOne(packet)
 	}
 	return
 }
