@@ -133,20 +133,20 @@ func main() {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	packets := packetSource.Packets()
 
+	var monitor common.Monitor
+	switch *protocol {
+	case "redis":
+		monitor = reorder.NewMonitor(net.ParseIP(*localHost), layers.TCPPort(*localPort))
+		monitor.SetWriter(wr)
+	case "raw":
+		monitor = &raw.Monitor{}
+	default:
+		log.Fatalf("no protocol found")
+	}
+
 	eg := errgroup.Group{}
 	for i := 0; i < *workerNum; i++ {
 		eg.Go(func() error {
-			var monitor common.Monitor
-			switch *protocol {
-			case "redis":
-				monitor = reorder.NewMonitor(net.ParseIP(*localHost), layers.TCPPort(*localPort))
-				monitor.SetWriter(wr)
-			case "raw":
-				monitor = &raw.Monitor{}
-			default:
-				log.Fatalf("no protocol found")
-			}
-
 			for {
 				select {
 				case packet, ok := <-packets:
