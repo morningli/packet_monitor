@@ -13,7 +13,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -63,8 +62,8 @@ func (r *Monitor) Feed(packet gopacket.Packet) {
 type NetworkWriter struct {
 	address  string
 	cluster  bool
-	sessions sync.Map
 	client   redis.UniversalClient
+	sessions *SessionMgr
 }
 
 func (w *NetworkWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byte) error {
@@ -73,7 +72,7 @@ func (w *NetworkWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []b
 }
 
 func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
-	return &NetworkWriter{address: address, cluster: cluster}
+	return &NetworkWriter{address: address, cluster: cluster, sessions: NewSessionMgr()}
 }
 
 func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
@@ -89,25 +88,13 @@ func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []by
 		}
 	}
 
-	var s *RespBuffer
-	if _s, ok := w.sessions.Load(common.RemoteKey(srcHost, srcPort)); !ok {
-		s = &RespBuffer{}
-		_s, loaded := w.sessions.LoadOrStore(common.RemoteKey(srcHost, srcPort), s)
-		if loaded {
-			s = _s.(*RespBuffer)
-		}
-	} else {
-		s = _s.(*RespBuffer)
+	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data)
+	if len(requests) == 0 {
+		return nil
 	}
-	s.Feed(data)
 
 	eg := errgroup.Group{}
-	for {
-		args := s.TryFetch()
-		if args == nil {
-			break
-		}
-
+	for _, args := range requests {
 		eg.Go(func() error {
 			err := w.client.Do(context.Background(), args...).Err()
 			if err != nil {
@@ -122,7 +109,7 @@ func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []by
 
 type FileWriter struct {
 	f        *os.File
-	sessions sync.Map
+	sessions *SessionMgr
 }
 
 func (w *FileWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byte) error {
@@ -131,28 +118,16 @@ func (w *FileWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byte
 }
 
 func NewFileWriter(f *os.File) *FileWriter {
-	return &FileWriter{f: f}
+	return &FileWriter{f: f, sessions: NewSessionMgr()}
 }
 
 func (w *FileWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
-	var s *RespBuffer
-	if _s, ok := w.sessions.Load(common.RemoteKey(srcHost, srcPort)); !ok {
-		s = &RespBuffer{}
-		_s, loaded := w.sessions.LoadOrStore(common.RemoteKey(srcHost, srcPort), s)
-		if loaded {
-			s = _s.(*RespBuffer)
-		}
-	} else {
-		s = _s.(*RespBuffer)
+	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data)
+	if len(requests) == 0 {
+		return nil
 	}
-	s.Feed(data)
 
-	for {
-		args := s.TryFetch()
-		if args == nil {
-			break
-		}
-
+	for _, args := range requests {
 		buff := strings.Builder{}
 		buff.Write(strconv.AppendFloat(nil, float64(time.Now().UnixMicro())/1e6, 'f', 6, 64))
 		buff.WriteString(" [0 ")

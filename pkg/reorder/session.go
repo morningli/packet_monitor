@@ -9,6 +9,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 var (
@@ -24,6 +25,7 @@ type Session struct {
 	nextSeq    uint32
 	packets    *rbt.Tree
 	mux        sync.Mutex
+	lastTime   time.Time
 }
 
 func NewSession(localHost net.IP, localPort layers.TCPPort, remoteHost net.IP, remotePort layers.TCPPort) *Session {
@@ -36,6 +38,8 @@ func NewSession(localHost net.IP, localPort layers.TCPPort, remoteHost net.IP, r
 }
 
 func (s *Session) AddPacket(packet gopacket.Packet) {
+	s.lastTime = time.Now()
+
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	if ipLayer == nil {
 		return

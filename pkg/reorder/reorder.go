@@ -19,6 +19,8 @@ type Monitor struct {
 	wr        common.Writer
 }
 
+const SessionTimeout = time.Minute * 30
+
 func NewMonitor(localHost net.IP, localPort layers.TCPPort) *Monitor {
 	m := &Monitor{localHost: localHost, localPort: localPort}
 	go func() {
@@ -26,6 +28,15 @@ func NewMonitor(localHost net.IP, localPort layers.TCPPort) *Monitor {
 			time.Sleep(time.Second * 300)
 			log.Infof("[Stats]process:%d,miss:%d", atomic.LoadUint64(&packetsProcess), atomic.LoadUint64(&packetsMiss))
 		}
+	}()
+	go func() {
+		m.sessions.Range(func(key, value interface{}) bool {
+			session := value.(*Session)
+			if time.Since(session.lastTime) > SessionTimeout {
+				m.sessions.Delete(key)
+			}
+			return true
+		})
 	}()
 	return m
 }

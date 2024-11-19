@@ -53,7 +53,7 @@ func (b *NoCopyBuffer) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
-type RespBuffer struct {
+type Decoder struct {
 	state stat
 	data  NoCopyBuffer
 
@@ -63,14 +63,14 @@ type RespBuffer struct {
 	ret   []interface{}
 }
 
-func (b *RespBuffer) Feed(data []byte) {
+func (b *Decoder) Append(data []byte) {
 	_, err := b.data.Write(data)
 	if err != nil {
 		log.Fatalf("feed data fail:%s", err)
 	}
 }
 
-func (b *RespBuffer) readLine(line []byte) (n int, err error) {
+func (b *Decoder) readLine(line []byte) (n int, err error) {
 	for i := 0; i < len(line); i++ {
 		d, err := b.data.ReadByte()
 		if err != nil {
@@ -84,7 +84,7 @@ func (b *RespBuffer) readLine(line []byte) (n int, err error) {
 	return len(line), io.ErrShortBuffer
 }
 
-func (b *RespBuffer) TryFetch() (ret []interface{}) {
+func (b *Decoder) TryDecode() (ret []interface{}) {
 	bytesInt := make([]byte, 13)
 	for {
 		switch b.state {
