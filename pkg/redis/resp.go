@@ -23,7 +23,7 @@ type NoCopyBuffer struct {
 
 func (b *NoCopyBuffer) Write(p []byte) (n int, err error) {
 	if !b.empty() {
-		log.Fatalf("write to not empty buffer")
+		log.Fatalf("write to not empty buffer, buf len:%d, off:%d, left:%s", len(b.buf), b.off, common.BytesToString(b.buf[b.off:]))
 	}
 	b.buf = p
 	b.off = 0

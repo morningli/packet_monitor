@@ -45,6 +45,7 @@ func main() {
 		log.Fatal(err)
 	}
 	log.SetLevel(lvl)
+	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 
 	// Open device
 	inactive, err := pcap.NewInactiveHandle(*interf)
