@@ -8,12 +8,18 @@ import (
 	"github.com/morningli/packet_monitor/pkg/common"
 	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+)
+
+var (
+	runningWrite int64
+	success      uint64
+	fail         uint64
 )
 
 type Monitor struct {
@@ -72,7 +78,17 @@ func (w *NetworkWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []b
 }
 
 func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
-	return &NetworkWriter{address: address, cluster: cluster, sessions: NewSessionMgr()}
+	w := &NetworkWriter{address: address, cluster: cluster, sessions: NewSessionMgr()}
+	go func() {
+		for {
+			time.Sleep(time.Second * 300)
+			log.Infof("[Stats]running write:%d,success request:%d,fail:%d",
+				atomic.LoadInt64(&runningWrite),
+				atomic.LoadUint64(&success),
+				atomic.LoadUint64(&fail))
+		}
+	}()
+	return w
 }
 
 func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
@@ -93,17 +109,20 @@ func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []by
 		return nil
 	}
 
-	eg := errgroup.Group{}
-	for _, args := range requests {
-		eg.Go(func() error {
+	go func() {
+		atomic.AddInt64(&runningWrite, 1)
+		for _, args := range requests {
 			err := w.client.Do(context.Background(), args...).Err()
 			if err != nil && err != redis.Nil {
 				log.Errorf("execute command fail.args:%+v,err:%s", args, err)
+				atomic.AddUint64(&fail, 1)
+			} else {
+				atomic.AddUint64(&success, 1)
 			}
-			return nil
-		})
-	}
-	_ = eg.Wait()
+		}
+		atomic.AddInt64(&runningWrite, -1)
+	}()
+
 	return nil
 }
 

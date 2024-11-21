@@ -49,7 +49,7 @@ func NewSessionMgr() *SessionMgr {
 				return
 			}
 
-			expireSessions := []string{}
+			var expireSessions []string
 
 			mgr.mux.RLock()
 			i := 500
