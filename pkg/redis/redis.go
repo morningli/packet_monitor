@@ -97,7 +97,7 @@ func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []by
 	for _, args := range requests {
 		eg.Go(func() error {
 			err := w.client.Do(context.Background(), args...).Err()
-			if err != nil {
+			if err != nil && err != redis.Nil {
 				log.Errorf("execute command fail.args:%+v,err:%s", args, err)
 			}
 			return nil
