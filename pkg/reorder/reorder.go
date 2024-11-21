@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+var sessionNum uint64
+
 type Monitor struct {
 	localHost net.IP
 	localPort layers.TCPPort
@@ -26,17 +28,32 @@ func NewMonitor(localHost net.IP, localPort layers.TCPPort) *Monitor {
 	go func() {
 		for {
 			time.Sleep(time.Second * 300)
-			log.Infof("[Stats]process:%d,miss:%d", atomic.LoadUint64(&packetsProcess), atomic.LoadUint64(&packetsMiss))
+			log.Infof("[Stats]session:%d,process:%d,miss:%d",
+				atomic.LoadUint64(&sessionNum),
+				atomic.LoadUint64(&packetsProcess),
+				atomic.LoadUint64(&packetsMiss))
 		}
 	}()
 	go func() {
-		m.sessions.Range(func(key, value interface{}) bool {
-			session := value.(*Session)
-			if time.Since(session.lastTime) > SessionTimeout {
-				m.sessions.Delete(key)
+		tick := time.NewTicker(time.Minute * 5)
+		defer tick.Stop()
+		for {
+			_, ok := <-tick.C
+			if !ok {
+				return
 			}
-			return true
-		})
+			total := 0
+			m.sessions.Range(func(key, value interface{}) bool {
+				session := value.(*Session)
+				if time.Since(session.lastTime) > SessionTimeout {
+					m.sessions.Delete(key)
+				} else {
+					total++
+				}
+				return true
+			})
+			atomic.StoreUint64(&sessionNum, uint64(total))
+		}
 	}()
 	return m
 }

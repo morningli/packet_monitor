@@ -81,7 +81,7 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 	}
 	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || s.packets.Size() > 200 {
 		if s.nextSeq > 0 && s.nextSeq != s.packets.Left().Key {
-			log.Warnf("%s:%s->%s:%s expect %d but %d",
+			log.Debugf("%s:%s->%s:%s expect %d but %d",
 				s.remoteHost.String(), s.remotePort.String(), s.localHost.String(), s.localPort.String(), s.nextSeq, s.packets.Left().Key)
 			atomic.AddUint64(&packetsMiss, 1)
 		}
