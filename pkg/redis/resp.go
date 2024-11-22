@@ -173,7 +173,7 @@ func (b *Decoder) TryDecode() (ret []interface{}) {
 			}
 
 			b.size--
-			b.ret = append(b.ret, b.token[:len(b.token)-2])
+			b.ret = append(b.ret, common.BytesToString(b.token[:len(b.token)-2])) //must string
 			b.token = nil
 
 			if b.size != 0 {
