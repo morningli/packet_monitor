@@ -79,6 +79,15 @@ func (w *NetworkWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []b
 
 func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
 	w := &NetworkWriter{address: address, cluster: cluster, sessions: NewSessionMgr()}
+	if cluster {
+		w.client = redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs: strings.Split(w.address, ","),
+		})
+	} else {
+		w.client = redis.NewClient(&redis.Options{
+			Addr: w.address,
+		})
+	}
 	go func() {
 		for {
 			time.Sleep(time.Second * 300)
@@ -92,18 +101,6 @@ func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
 }
 
 func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
-	if w.client == nil {
-		if w.cluster {
-			w.client = redis.NewClusterClient(&redis.ClusterOptions{
-				Addrs: strings.Split(w.address, ","),
-			})
-		} else {
-			w.client = redis.NewClient(&redis.Options{
-				Addr: w.address,
-			})
-		}
-	}
-
 	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data)
 	if len(requests) == 0 {
 		return nil
