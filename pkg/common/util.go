@@ -33,3 +33,11 @@ func Btoi(b []byte) (int, error) {
 	}
 	return strconv.Atoi(BytesToString(b))
 }
+
+func IsWrite(cmd string) bool {
+	return false
+}
+
+func GetFirstKey(args []interface{}) string {
+	return ""
+}

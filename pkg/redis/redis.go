@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -163,5 +164,86 @@ func (w *FileWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte)
 			log.Fatal(err)
 		}
 	}
+	return nil
+}
+
+type CountWriter struct {
+	sessions *SessionMgr
+	wCounts  [2]sync.Map
+	rCounts  [2]sync.Map
+	pos      int64
+	mtime    int64
+}
+
+func (w *CountWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byte) error {
+	// ignore
+	return nil
+}
+
+func NewCountWriter() *CountWriter {
+	return &CountWriter{mtime: time.Now().Unix()}
+}
+
+func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
+	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data)
+	if len(requests) == 0 {
+		return nil
+	}
+
+	for _, r := range requests {
+		if len(r) != 2 {
+			continue
+		}
+		cmd := r[0].(string)
+		key := common.GetFirstKey(r)
+		write := common.IsWrite(cmd)
+
+		var c *sync.Map
+		if write {
+			c = &w.wCounts[atomic.LoadInt64(&w.pos)]
+		} else {
+			c = &w.rCounts[atomic.LoadInt64(&w.pos)]
+		}
+		var count int64 = 1
+		ic, ok := c.LoadOrStore(key, &count)
+		if ok {
+			cc := ic.(*int64)
+			atomic.AddInt64(cc, 1)
+		}
+	}
+
+	otime := atomic.LoadInt64(&w.mtime)
+	if time.Now().Unix()-otime < 300 {
+		return nil
+	}
+
+	ok := atomic.CompareAndSwapInt64(&w.mtime, otime, time.Now().Unix())
+	if !ok {
+		return nil
+	}
+
+	p := atomic.LoadInt64(&w.pos)
+	np := (p + 1) & 0x1
+	ok = atomic.CompareAndSwapInt64(&w.pos, p, np)
+	if !ok {
+		return nil
+	}
+
+	w.rCounts[p].Range(func(key, value interface{}) bool {
+		c := value.(*int64)
+		if *c > 1 {
+			fmt.Printf("read key:%s, freq:%d\n", key, c)
+		}
+		return ok
+	})
+
+	w.wCounts[p].Range(func(key, value interface{}) bool {
+		c := value.(*int64)
+		if *c > 1 {
+			fmt.Printf("write key:%s, freq:%d\n", key, c)
+		}
+		return ok
+	})
+
 	return nil
 }
