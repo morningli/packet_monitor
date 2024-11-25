@@ -181,7 +181,7 @@ func (w *CountWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byt
 }
 
 func NewCountWriter() *CountWriter {
-	return &CountWriter{mtime: time.Now().Unix()}
+	return &CountWriter{mtime: time.Now().Unix(), sessions: NewSessionMgr()}
 }
 
 func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
@@ -234,6 +234,7 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 		if *c > 1 {
 			fmt.Printf("read key:%s, freq:%d\n", key, c)
 		}
+		w.rCounts[p].Delete(key)
 		return ok
 	})
 
@@ -242,6 +243,7 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 		if *c > 1 {
 			fmt.Printf("write key:%s, freq:%d\n", key, c)
 		}
+		w.wCounts[p].Delete(key)
 		return ok
 	})
 
