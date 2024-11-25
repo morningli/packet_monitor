@@ -194,9 +194,13 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 		if len(r) != 2 {
 			continue
 		}
-		cmd := r[0].(string)
-		key := common.GetFirstKey(r)
+		cmd := strings.ToLower(r[0].(string))
+		key := common.GetFirstKey(cmd, r)
 		write := common.IsWrite(cmd)
+
+		if len(key) == 0 {
+			continue
+		}
 
 		var c *sync.Map
 		if write {
