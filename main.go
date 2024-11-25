@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"runtime/debug"
+	"strconv"
 	"strings"
 )
 
@@ -129,7 +130,11 @@ func main() {
 			defer f.Close()
 			wr = redis.NewFileWriter(f)
 		case "count":
-			wr = redis.NewCountWriter()
+			threshold := 1
+			if len(outputParams) > 0 {
+				threshold, _ = strconv.Atoi(outputParams)
+			}
+			wr = redis.NewCountWriter(threshold)
 		}
 	}
 

@@ -171,6 +171,7 @@ type CountWriter struct {
 	sessions *SessionMgr
 	wCounts  [2]sync.Map
 	rCounts  [2]sync.Map
+	min      int64
 	pos      int64
 	mtime    int64
 }
@@ -180,8 +181,8 @@ func (w *CountWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byt
 	return nil
 }
 
-func NewCountWriter() *CountWriter {
-	return &CountWriter{mtime: time.Now().Unix(), sessions: NewSessionMgr()}
+func NewCountWriter(minCount int) *CountWriter {
+	return &CountWriter{min: int64(minCount), mtime: time.Now().Unix(), sessions: NewSessionMgr()}
 }
 
 func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
@@ -235,8 +236,8 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 
 	w.rCounts[p].Range(func(key, value interface{}) bool {
 		c := value.(*int64)
-		if *c > 1 {
-			fmt.Printf("read key:%s, freq:%d\n", key, c)
+		if *c >= w.min {
+			fmt.Printf("read key:%s, freq:%d\n", key, *c)
 		}
 		w.rCounts[p].Delete(key)
 		return ok
@@ -244,8 +245,8 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 
 	w.wCounts[p].Range(func(key, value interface{}) bool {
 		c := value.(*int64)
-		if *c > 1 {
-			fmt.Printf("write key:%s, freq:%d\n", key, c)
+		if *c >= w.min {
+			fmt.Printf("write key:%s, freq:%d\n", key, *c)
 		}
 		w.wCounts[p].Delete(key)
 		return ok
