@@ -30,7 +30,7 @@ var (
 	- file: output to file, params is file name, eg: file:out.txt
 	- single: output to single redis, params is redis address, eg: single:127.0.0.1:8003
 	- cluster： output to redis cluster, params is cluster address, eg: cluster:127.0.0.1:8003,127.0.0.2:8003
-	- count: count key frequency which more than threshold every 5 minute, eg: count:2`)
+	- count: count key frequency which more than threshold every seconds, eg: count:1`)
 	workerNum = flag.Int("worker-num", 10, "worker number")
 	interf    = flag.String("i", "any", "network interface")
 	buffSize  = flag.Int("B", 256<<20, "buffer size")

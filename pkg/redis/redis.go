@@ -191,6 +191,8 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 		return nil
 	}
 
+	const statTime = 1000000
+
 	for _, r := range requests {
 		if len(r) != 2 {
 			continue
@@ -217,12 +219,12 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 		}
 	}
 
-	otime := atomic.LoadInt64(&w.mtime)
-	if time.Now().Unix()-otime < 300 {
+	oldTime := atomic.LoadInt64(&w.mtime)
+	if time.Now().UnixMicro()-oldTime < statTime {
 		return nil
 	}
 
-	ok := atomic.CompareAndSwapInt64(&w.mtime, otime, time.Now().Unix())
+	ok := atomic.CompareAndSwapInt64(&w.mtime, oldTime, time.Now().UnixMicro())
 	if !ok {
 		return nil
 	}
@@ -237,7 +239,7 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 	w.rCounts[p].Range(func(key, value interface{}) bool {
 		c := value.(*int64)
 		if *c >= w.min {
-			fmt.Printf("read key:%s, freq:%d\n", key, *c)
+			fmt.Printf("[%d]read key:%s, freq:%d\n", oldTime, key, *c)
 		}
 		w.rCounts[p].Delete(key)
 		return ok
@@ -246,7 +248,7 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 	w.wCounts[p].Range(func(key, value interface{}) bool {
 		c := value.(*int64)
 		if *c >= w.min {
-			fmt.Printf("write key:%s, freq:%d\n", key, *c)
+			fmt.Printf("[%d]write key:%s, freq:%d\n", oldTime, key, *c)
 		}
 		w.wCounts[p].Delete(key)
 		return ok
