@@ -62,6 +62,7 @@ type Decoder struct {
 	len   int
 	token []byte
 	ret   []interface{}
+	t     byte
 }
 
 func (b *Decoder) Append(data []byte) {
@@ -95,6 +96,7 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 			if err == io.EOF {
 				return nil
 			}
+			b.t = t
 			switch t {
 			case '*':
 				b.state = stateBulkSize
@@ -111,6 +113,10 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 			case ':':
 				b.state = stateSimpleString
 				b.token = nil
+			case '$':
+				b.state = stateBulkLen
+				b.token = bytesInt
+				b.len = 0
 			}
 		case stateSimpleString:
 			n, err := b.readLine(bytesString)
@@ -199,6 +205,13 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 				log.Errorf("parse bulk data fail:%s", common.BytesToString(b.token))
 				b.state = stateType
 				break
+			}
+
+			if b.t == '$' {
+				b.state = stateType
+				ret = b.token[:len(b.token)-2]
+				b.token = nil
+				return
 			}
 
 			b.size--
