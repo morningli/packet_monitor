@@ -17,7 +17,7 @@ func NewSession(address string) *Session {
 	return &Session{address: address, in: &Decoder{}, out: &Decoder{}, lastTime: time.Now()}
 }
 
-func (s *Session) AppendAndFetch(data []byte, in bool) (ret [][]interface{}) {
+func (s *Session) AppendAndFetch(data []byte, in bool) (ret []interface{}) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -102,7 +102,7 @@ func (s *SessionMgr) session(address string) *Session {
 	return session
 }
 
-func (s *SessionMgr) AppendAndFetch(address string, data []byte, in bool) [][]interface{} {
+func (s *SessionMgr) AppendAndFetch(address string, data []byte, in bool) []interface{} {
 	session := s.session(address)
 	return session.AppendAndFetch(data, in)
 }

@@ -111,7 +111,7 @@ func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []by
 	go func() {
 		atomic.AddInt64(&runningWrite, 1)
 		for _, args := range requests {
-			err := w.client.Do(context.Background(), args...).Err()
+			err := w.client.Do(context.Background(), args.([]interface{})...).Err()
 			if err != nil && err != redis.Nil {
 				log.Errorf("execute command fail.args:%+v,err:%s", args, err)
 				atomic.AddUint64(&fail, 1)
@@ -154,7 +154,7 @@ func (w *FileWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte)
 		buff.WriteString(srcPort.String())
 		buff.WriteString("]")
 
-		for _, v := range args {
+		for _, v := range args.([]interface{}) {
 			buff.WriteString(" \"")
 			buff.Write(v.([]byte))
 			buff.WriteString("\"")
@@ -195,11 +195,12 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 	const statTime = 1000000
 
 	for _, r := range requests {
-		if len(r) != 2 {
+		args := r.([]interface{})
+		if len(args) != 2 {
 			continue
 		}
-		cmd := strings.ToLower(r[0].(string))
-		key := common.GetFirstKey(cmd, r)
+		cmd := strings.ToLower(args[0].(string))
+		key := common.GetFirstKey(cmd, args)
 		write := common.IsWrite(cmd)
 
 		if len(key) == 0 {
@@ -281,9 +282,15 @@ func (w *HistogramWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data [
 	w.mux.RLock()
 	for _, r := range requests {
 		total := 0
-		for _, a := range r {
-			total += len(a.(string))
+		switch rsp := r.(type) {
+		case []interface{}:
+			for _, a := range rsp {
+				total += len(a.(string))
+			}
+		case []byte:
+			total = len(rsp)
 		}
+
 		err := w.histogram.Current.RecordValue(int64(total))
 		if err != nil {
 			log.Errorf("stat req size fail, err:%s", err.Error())
@@ -336,7 +343,7 @@ func (w *HistogramWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []
 	w.mux.RLock()
 	for _, r := range requests {
 		total := 0
-		for _, a := range r {
+		for _, a := range r.([]interface{}) {
 			total += len(a.(string))
 		}
 		err := w.histogram.Current.RecordValue(int64(total))

@@ -14,6 +14,7 @@ const (
 	stateBulkLenPre
 	stateBulkLen
 	stateBulkData
+	stateSimpleString
 )
 
 type NoCopyBuffer struct {
@@ -84,8 +85,9 @@ func (b *Decoder) readLine(line []byte) (n int, err error) {
 	return len(line), io.ErrShortBuffer
 }
 
-func (b *Decoder) TryDecode() (ret []interface{}) {
+func (b *Decoder) TryDecode() (ret interface{}) {
 	bytesInt := make([]byte, 13)
+	bytesString := make([]byte, 128)
 	for {
 		switch b.state {
 		case stateType:
@@ -93,14 +95,41 @@ func (b *Decoder) TryDecode() (ret []interface{}) {
 			if err == io.EOF {
 				return nil
 			}
-			if t != '*' {
+			switch t {
+			case '*':
+				b.state = stateBulkSize
+				b.size = 0
+				b.len = 0
+				b.token = bytesInt
+				b.ret = make([]interface{}, 0, 4)
+			case '+':
+				b.state = stateSimpleString
+				b.token = nil
+			case '-':
+				b.state = stateSimpleString
+				b.token = nil
+			case ':':
+				b.state = stateSimpleString
+				b.token = nil
+			}
+		case stateSimpleString:
+			n, err := b.readLine(bytesString)
+			b.token = append(b.token, bytesString[:n]...)
+			if err == io.ErrShortBuffer {
+				continue
+			}
+			if err != nil {
+				return nil
+			}
+			if b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
+				log.Errorf("parse simple string fail:%s", common.BytesToString(b.token))
+				b.state = stateType
 				break
 			}
-			b.state = stateBulkSize
-			b.size = 0
-			b.len = 0
-			b.token = bytesInt
-			b.ret = make([]interface{}, 0, 4)
+			ret = b.token[:len(b.token)-2]
+			b.state = stateType
+			b.token = nil
+			return
 		case stateBulkSize:
 			n, err := b.readLine(b.token[b.len:])
 			b.len += n
@@ -115,7 +144,7 @@ func (b *Decoder) TryDecode() (ret []interface{}) {
 
 			size, err := common.Btoi(b.token[:b.len-2])
 			if err != nil {
-				log.Errorf("parse bulk size fail:%s", common.BytesToString(b.token[:b.len-2]))
+				log.Errorf("parse bulk size fail:%s", common.BytesToString(b.token))
 				b.state = stateType
 				break
 			}
@@ -148,12 +177,12 @@ func (b *Decoder) TryDecode() (ret []interface{}) {
 
 			size, err := common.Btoi(b.token[:b.len-2])
 			if err != nil {
-				log.Errorf("parse bulk len fail:%s", common.BytesToString(b.token[:b.len-2]))
+				log.Errorf("parse bulk len fail:%s", common.BytesToString(b.token))
 				b.state = stateType
 				break
 			}
-			b.len = int(size) + 2
-			b.token = make([]byte, int(size)+2)
+			b.len = size + 2
+			b.token = make([]byte, size+2)
 			b.state = stateBulkData
 		case stateBulkData:
 			n, err := b.data.Read(b.token[len(b.token)-b.len:])
@@ -167,7 +196,7 @@ func (b *Decoder) TryDecode() (ret []interface{}) {
 			}
 
 			if b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
-				log.Errorf("parse bulk data fail:%s", common.BytesToString(b.token[len(b.token)-2:]))
+				log.Errorf("parse bulk data fail:%s", common.BytesToString(b.token))
 				b.state = stateType
 				break
 			}
