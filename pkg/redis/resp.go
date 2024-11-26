@@ -70,6 +70,7 @@ func (b *Decoder) Append(data []byte) {
 	if err != nil {
 		log.Fatalf("feed data fail:%s", err)
 	}
+	log.Debugf("append %s", common.BytesToString(data))
 }
 
 func (b *Decoder) readLine(line []byte) (n int, err error) {
