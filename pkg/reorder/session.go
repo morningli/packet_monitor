@@ -22,8 +22,10 @@ type Session struct {
 	remotePort layers.TCPPort
 	localHost  net.IP
 	localPort  layers.TCPPort
-	nextSeq    uint32
-	packets    *rbt.Tree
+	nextSeqIn  uint32
+	packetsIn  *rbt.Tree
+	nextSeqOut uint32
+	packetsOut *rbt.Tree
 	mux        sync.Mutex
 	lastTime   time.Time
 }
@@ -34,10 +36,14 @@ func NewSession(localHost net.IP, localPort layers.TCPPort, remoteHost net.IP, r
 		localPort:  localPort,
 		remoteHost: remoteHost,
 		remotePort: remotePort,
-		packets:    rbt.NewWith(utils.UInt32Comparator)}
+		packetsIn:  rbt.NewWith(utils.UInt32Comparator),
+		packetsOut: rbt.NewWith(utils.UInt32Comparator)}
 }
 
 func (s *Session) AddPacket(packet gopacket.Packet) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
 	s.lastTime = time.Now()
 
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
@@ -54,39 +60,55 @@ func (s *Session) AddPacket(packet gopacket.Packet) {
 
 	// in
 	if ip.DstIP.Equal(s.localHost) && tcp.DstPort == s.localPort {
-		if s.nextSeq > tcp.Seq {
+		if s.nextSeqIn > tcp.Seq {
 			// expired packet
 			return
 		}
 		if len(tcp.Payload) == 0 {
 			return
 		}
+		if _, ok := s.packetsIn.Get(tcp.Seq); !ok {
+			s.packetsIn.Put(tcp.Seq, packet)
+		}
 	}
 
 	// out
 	if ip.SrcIP.Equal(s.localHost) && tcp.SrcPort == s.localPort {
-		// TODO
-		return
-	}
-
-	if _, ok := s.packets.Get(tcp.Seq); !ok {
-		s.packets.Put(tcp.Seq, packet)
+		if s.nextSeqOut > tcp.Seq {
+			// expired packet
+			return
+		}
+		if len(tcp.Payload) == 0 {
+			return
+		}
+		if _, ok := s.packetsOut.Get(tcp.Seq); !ok {
+			s.packetsOut.Put(tcp.Seq, packet)
+		}
 	}
 }
 
-func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
-	if s.packets.Empty() {
+func (s *Session) TryGetPacket(in bool) (packet gopacket.Packet, ok bool) {
+	var (
+		packets = s.packetsIn
+		nextSeq = &s.nextSeqIn
+	)
+	if !in {
+		packets = s.packetsOut
+		nextSeq = &s.nextSeqOut
+	}
+
+	if packets.Empty() {
 		ok = false
 		return
 	}
-	if s.nextSeq == 0 || s.packets.Left().Key == s.nextSeq || s.packets.Size() > 200 {
-		if s.nextSeq > 0 && s.nextSeq != s.packets.Left().Key {
+	if *nextSeq == 0 || packets.Left().Key == *nextSeq || packets.Size() > 200 {
+		if *nextSeq > 0 && *nextSeq != packets.Left().Key {
 			log.Debugf("%s:%s->%s:%s expect %d but %d",
-				s.remoteHost.String(), s.remotePort.String(), s.localHost.String(), s.localPort.String(), s.nextSeq, s.packets.Left().Key)
+				s.remoteHost.String(), s.remotePort.String(), s.localHost.String(), s.localPort.String(), *nextSeq, packets.Left().Key)
 			atomic.AddUint64(&packetsMiss, 1)
 		}
 
-		packet = s.packets.Left().Value.(gopacket.Packet)
+		packet = packets.Left().Value.(gopacket.Packet)
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		if tcpLayer == nil {
 			return
@@ -94,13 +116,13 @@ func (s *Session) TryGetPacket() (packet gopacket.Packet, ok bool) {
 		tcp, _ := tcpLayer.(*layers.TCP)
 
 		if tcp.SYN {
-			s.nextSeq = tcp.Seq + 1
-			s.packets.Remove(tcp.Seq)
+			*nextSeq = tcp.Seq + 1
+			packets.Remove(tcp.Seq)
 			return
 		}
 
-		s.nextSeq = tcp.Seq + uint32(len(tcp.Payload))
-		s.packets.Remove(tcp.Seq)
+		*nextSeq = tcp.Seq + uint32(len(tcp.Payload))
+		packets.Remove(tcp.Seq)
 		ok = true
 		atomic.AddUint64(&packetsProcess, 1)
 	}

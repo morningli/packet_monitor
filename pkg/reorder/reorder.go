@@ -19,12 +19,13 @@ type Monitor struct {
 	localPort layers.TCPPort
 	sessions  sync.Map //Session
 	wr        common.Writer
+	onlyIn    bool
 }
 
 const SessionTimeout = time.Minute * 30
 
-func NewMonitor(localHost net.IP, localPort layers.TCPPort) *Monitor {
-	m := &Monitor{localHost: localHost, localPort: localPort}
+func NewMonitor(localHost net.IP, localPort layers.TCPPort, onlyIn bool) *Monitor {
+	m := &Monitor{localHost: localHost, localPort: localPort, onlyIn: onlyIn}
 	go func() {
 		for {
 			time.Sleep(time.Second * 300)
@@ -75,7 +76,7 @@ func (s *Monitor) processOne(packet gopacket.Packet) {
 	}
 	tcp, _ := tcpLayer.(*layers.TCP)
 
-	if ip.SrcIP.Equal(s.localHost) && tcp.SrcPort == s.localPort {
+	if !s.onlyIn && ip.SrcIP.Equal(s.localHost) && tcp.SrcPort == s.localPort {
 		if s.wr != nil {
 			err := s.wr.FlowOut(ip.DstIP, tcp.DstPort, tcpLayer.LayerPayload())
 			if err != nil {
@@ -113,6 +114,7 @@ func (s *Monitor) Feed(packet gopacket.Packet) {
 		key        string
 		remoteHost net.IP
 		remotePort layers.TCPPort
+		in         bool
 	)
 
 	if ip.SrcIP.Equal(s.localHost) && tcp.SrcPort == s.localPort {
@@ -120,8 +122,11 @@ func (s *Monitor) Feed(packet gopacket.Packet) {
 		key = fmt.Sprintf("%s:%s", ip.DstIP.String(), tcp.DstPort.String())
 		if tcp.RST {
 			s.sessions.Delete(key)
+			return
 		}
-		return
+		remoteHost = ip.DstIP
+		remotePort = tcp.DstPort
+		in = false
 	} else if ip.DstIP.Equal(s.localHost) && tcp.DstPort == s.localPort {
 		// in
 		key = fmt.Sprintf("%s:%s", ip.SrcIP.String(), tcp.SrcPort.String())
@@ -131,7 +136,12 @@ func (s *Monitor) Feed(packet gopacket.Packet) {
 		}
 		remoteHost = ip.SrcIP
 		remotePort = tcp.SrcPort
+		in = true
 	} else {
+		return
+	}
+
+	if s.onlyIn && !in {
 		return
 	}
 
@@ -141,13 +151,10 @@ func (s *Monitor) Feed(packet gopacket.Packet) {
 		session = tmp.(*Session)
 	}
 
-	session.mux.Lock()
-	defer session.mux.Unlock()
-
 	session.AddPacket(packet)
 
 	for {
-		packet, ok := session.TryGetPacket()
+		packet, ok := session.TryGetPacket(in)
 		if !ok {
 			break
 		}

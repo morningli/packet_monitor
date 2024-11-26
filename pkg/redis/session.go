@@ -7,22 +7,29 @@ import (
 
 type Session struct {
 	address  string
-	decoder  Decoder
+	in       *Decoder
+	out      *Decoder
 	lastTime time.Time
 	mux      sync.Mutex
 }
 
 func NewSession(address string) *Session {
-	return &Session{address: address, lastTime: time.Now()}
+	return &Session{address: address, in: &Decoder{}, out: &Decoder{}, lastTime: time.Now()}
 }
 
-func (s *Session) AppendAndFetch(data []byte) (ret [][]interface{}) {
+func (s *Session) AppendAndFetch(data []byte, in bool) (ret [][]interface{}) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
+
+	d := s.in
+	if !in {
+		d = s.out
+	}
 	s.lastTime = time.Now()
-	s.decoder.Append(data)
+
+	d.Append(data)
 	for {
-		args := s.decoder.TryDecode()
+		args := d.TryDecode()
 		if args == nil {
 			break
 		}
@@ -95,7 +102,7 @@ func (s *SessionMgr) session(address string) *Session {
 	return session
 }
 
-func (s *SessionMgr) AppendAndFetch(address string, data []byte) [][]interface{} {
+func (s *SessionMgr) AppendAndFetch(address string, data []byte, in bool) [][]interface{} {
 	session := s.session(address)
-	return session.AppendAndFetch(data)
+	return session.AppendAndFetch(data, in)
 }

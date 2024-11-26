@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/morningli/packet_monitor/pkg/common"
@@ -102,7 +103,7 @@ func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
 }
 
 func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
-	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data)
+	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data, true)
 	if len(requests) == 0 {
 		return nil
 	}
@@ -139,7 +140,7 @@ func NewFileWriter(f *os.File) *FileWriter {
 }
 
 func (w *FileWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
-	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data)
+	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data, true)
 	if len(requests) == 0 {
 		return nil
 	}
@@ -186,7 +187,7 @@ func NewCountWriter(minCount int) *CountWriter {
 }
 
 func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
-	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data)
+	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data, true)
 	if len(requests) == 0 {
 		return nil
 	}
@@ -254,5 +255,117 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 		return ok
 	})
 
+	return nil
+}
+
+type HistogramWriter struct {
+	sessions  *SessionMgr
+	mux       sync.RWMutex
+	histogram *hdrhistogram.WindowedHistogram
+	mtime     int64
+	target    string
+}
+
+func (w *HistogramWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byte) error {
+	const statTime = 300000000
+
+	if w.target != "rsp.size" {
+		return nil
+	}
+
+	requests := w.sessions.AppendAndFetch(common.RemoteKey(dstHost, dstPort), data, false)
+	if len(requests) == 0 {
+		return nil
+	}
+
+	w.mux.RLock()
+	for _, r := range requests {
+		total := 0
+		for _, a := range r {
+			total += len(a.(string))
+		}
+		err := w.histogram.Current.RecordValue(int64(total))
+		if err != nil {
+			log.Errorf("stat req size fail, err:%s", err.Error())
+		}
+	}
+	w.mux.RUnlock()
+
+	oldTime := atomic.LoadInt64(&w.mtime)
+	if time.Now().Unix()-oldTime < statTime {
+		return nil
+	}
+
+	ok := atomic.CompareAndSwapInt64(&w.mtime, oldTime, time.Now().Unix())
+	if !ok {
+		return nil
+	}
+
+	w.mux.RLock()
+	results := w.histogram.Merge().ValueAtPercentiles([]float64{90, 95, 99})
+	w.mux.RUnlock()
+
+	w.mux.Lock()
+	w.histogram.Rotate()
+	w.mux.Unlock()
+
+	for p, r := range results {
+		fmt.Printf("[%d]rsp.size %f%%:%d\n", oldTime, p, r)
+	}
+	return nil
+}
+
+const bucketNum = 10
+
+func NewHistogramWriter(minValue, maxValue int64, target string) *HistogramWriter {
+	return &HistogramWriter{target: target, histogram: hdrhistogram.NewWindowed(bucketNum, minValue, maxValue, 2), sessions: NewSessionMgr()}
+}
+
+func (w *HistogramWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
+	const statTime = 300000000
+
+	if w.target != "req.size" {
+		return nil
+	}
+
+	requests := w.sessions.AppendAndFetch(common.RemoteKey(srcHost, srcPort), data, true)
+	if len(requests) == 0 {
+		return nil
+	}
+
+	w.mux.RLock()
+	for _, r := range requests {
+		total := 0
+		for _, a := range r {
+			total += len(a.(string))
+		}
+		err := w.histogram.Current.RecordValue(int64(total))
+		if err != nil {
+			log.Errorf("stat req size fail, err:%s", err.Error())
+		}
+	}
+	w.mux.RUnlock()
+
+	oldTime := atomic.LoadInt64(&w.mtime)
+	if time.Now().Unix()-oldTime < statTime {
+		return nil
+	}
+
+	ok := atomic.CompareAndSwapInt64(&w.mtime, oldTime, time.Now().Unix())
+	if !ok {
+		return nil
+	}
+
+	w.mux.RLock()
+	results := w.histogram.Merge().ValueAtPercentiles([]float64{90, 95, 99})
+	w.mux.RUnlock()
+
+	w.mux.Lock()
+	w.histogram.Rotate()
+	w.mux.Unlock()
+
+	for p, r := range results {
+		fmt.Printf("[%d]req.size %f%%:%d\n", oldTime, p, r)
+	}
 	return nil
 }

@@ -30,7 +30,8 @@ var (
 	- file: output to file, params is file name, eg: file:out.txt
 	- single: output to single redis, params is redis address, eg: single:127.0.0.1:8003
 	- cluster： output to redis cluster, params is cluster address, eg: cluster:127.0.0.1:8003,127.0.0.2:8003
-	- count: count key frequency which more than threshold every seconds, eg: count:1`)
+	- count: count key frequency which more than threshold every seconds, eg: count:1
+	- histogram: statistical histogram based on specified attributes, eg: histogram:req.size, histogram:rsp.size`)
 	workerNum = flag.Int("worker-num", 10, "worker number")
 	interf    = flag.String("i", "any", "network interface")
 	buffSize  = flag.Int("B", 256<<20, "buffer size")
@@ -82,15 +83,7 @@ func main() {
 	}
 	defer handle.Close()
 
-	filter := fmt.Sprintf("tcp and dst host %s and dst port %d", *localHost, *localPort)
-	err = handle.SetBPFFilter(filter)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = handle.SetDirection(pcap.DirectionIn)
-	if err != nil {
-		log.Fatal(err)
-	}
+	onlyIn := false
 
 	var wr common.Writer
 	switch *protocol {
@@ -112,13 +105,16 @@ func main() {
 				log.Fatalf("No address specified")
 			}
 			wr = redis.NewNetworkWriter(outputParams, false)
+			onlyIn = true
 		case "cluster":
 			if len(outputParams) == 0 {
 				log.Fatalf("No address specified")
 			}
 			wr = redis.NewNetworkWriter(outputParams, true)
+			onlyIn = true
 		case "default":
 			wr = redis.NewFileWriter(os.Stdout)
+			onlyIn = true
 		case "file":
 			if len(outputParams) == 0 {
 				log.Fatalf("No file name specified")
@@ -129,12 +125,37 @@ func main() {
 			}
 			defer f.Close()
 			wr = redis.NewFileWriter(f)
+			onlyIn = true
 		case "count":
 			threshold := 1
 			if len(outputParams) > 0 {
 				threshold, _ = strconv.Atoi(outputParams)
 			}
 			wr = redis.NewCountWriter(threshold)
+			onlyIn = true
+		case "histogram":
+			wr = redis.NewHistogramWriter(1, 1<<30, outputParams)
+			if outputParams[:3] == "req" {
+				onlyIn = true
+			}
+		}
+	}
+
+	if onlyIn {
+		filter := fmt.Sprintf("tcp and dst host %s and dst port %d", *localHost, *localPort)
+		err = handle.SetBPFFilter(filter)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = handle.SetDirection(pcap.DirectionIn)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		filter := fmt.Sprintf("tcp and host %s and port %d", *localHost, *localPort)
+		err = handle.SetBPFFilter(filter)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
@@ -145,7 +166,7 @@ func main() {
 	var monitor common.Monitor
 	switch *protocol {
 	case "redis":
-		monitor = reorder.NewMonitor(net.ParseIP(*localHost), layers.TCPPort(*localPort))
+		monitor = reorder.NewMonitor(net.ParseIP(*localHost), layers.TCPPort(*localPort), onlyIn)
 		monitor.SetWriter(wr)
 	case "raw":
 		monitor = &raw.Monitor{}
