@@ -110,8 +110,12 @@ func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []by
 
 	go func() {
 		atomic.AddInt64(&runningWrite, 1)
-		for _, args := range requests {
-			err := w.client.Do(context.Background(), args.([]interface{})...).Err()
+		for _, r := range requests {
+			args, ok := r.([]interface{})
+			if !ok {
+				continue
+			}
+			err := w.client.Do(context.Background(), args...).Err()
 			if err != nil && err != redis.Nil {
 				log.Errorf("execute command fail.args:%+v,err:%s", args, err)
 				atomic.AddUint64(&fail, 1)
@@ -145,7 +149,7 @@ func (w *FileWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte)
 		return nil
 	}
 
-	for _, args := range requests {
+	for _, r := range requests {
 		buff := strings.Builder{}
 		buff.Write(strconv.AppendFloat(nil, float64(time.Now().UnixMicro())/1e6, 'f', 6, 64))
 		buff.WriteString(" [0 ")
@@ -154,7 +158,11 @@ func (w *FileWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte)
 		buff.WriteString(srcPort.String())
 		buff.WriteString("]")
 
-		for _, v := range args.([]interface{}) {
+		args, ok := r.([]interface{})
+		if !ok {
+			continue
+		}
+		for _, v := range args {
 			buff.WriteString(" \"")
 			buff.Write(v.([]byte))
 			buff.WriteString("\"")
@@ -195,7 +203,10 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 	const statTime = 1000000
 
 	for _, r := range requests {
-		args := r.([]interface{})
+		args, ok := r.([]interface{})
+		if !ok {
+			continue
+		}
 		if len(args) != 2 {
 			continue
 		}
@@ -342,8 +353,12 @@ func (w *HistogramWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []
 
 	w.mux.RLock()
 	for _, r := range requests {
+		args, ok := r.([]interface{})
+		if !ok {
+			continue
+		}
 		total := 0
-		for _, a := range r.([]interface{}) {
+		for _, a := range args {
 			total += len(a.(string))
 		}
 		err := w.histogram.Current.RecordValue(int64(total))
