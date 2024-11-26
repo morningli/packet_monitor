@@ -84,6 +84,7 @@ func main() {
 	defer handle.Close()
 
 	onlyIn := false
+	onlyOut := false
 
 	var wr common.Writer
 	switch *protocol {
@@ -137,6 +138,8 @@ func main() {
 			wr = redis.NewHistogramWriter(1, 1<<30, outputParams)
 			if outputParams[:3] == "req" {
 				onlyIn = true
+			} else if outputParams[:3] == "rsp" {
+				onlyOut = true
 			}
 		}
 	}
@@ -148,6 +151,16 @@ func main() {
 			log.Fatal(err)
 		}
 		err = handle.SetDirection(pcap.DirectionIn)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else if onlyOut {
+		filter := fmt.Sprintf("tcp and src host %s and src port %d", *localHost, *localPort)
+		err = handle.SetBPFFilter(filter)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = handle.SetDirection(pcap.DirectionInOut)
 		if err != nil {
 			log.Fatal(err)
 		}

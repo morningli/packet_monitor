@@ -116,12 +116,12 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 			n, err := b.readLine(bytesString)
 			b.token = append(b.token, bytesString[:n]...)
 			if err == io.ErrShortBuffer {
-				continue
+				break
 			}
 			if err != nil {
 				return nil
 			}
-			if b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
+			if len(b.token) < 2 || b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
 				log.Errorf("parse simple string fail:%s", common.BytesToString(b.token))
 				b.state = stateType
 				break
@@ -195,7 +195,7 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 				break
 			}
 
-			if b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
+			if len(b.token) < 2 || b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
 				log.Errorf("parse bulk data fail:%s", common.BytesToString(b.token))
 				b.state = stateType
 				break
