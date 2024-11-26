@@ -4,6 +4,7 @@ import (
 	"github.com/morningli/packet_monitor/pkg/common"
 	log "github.com/sirupsen/logrus"
 	"io"
+	"sync/atomic"
 )
 
 type stat int
@@ -54,7 +55,10 @@ func (b *NoCopyBuffer) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
+var id int32
+
 type Decoder struct {
+	id    int32
 	state stat
 	data  NoCopyBuffer
 
@@ -65,12 +69,16 @@ type Decoder struct {
 	t     byte
 }
 
+func NewDecoder() *Decoder {
+	return &Decoder{id: atomic.AddInt32(&id, 1)}
+}
+
 func (b *Decoder) Append(data []byte) {
 	_, err := b.data.Write(data)
 	if err != nil {
-		log.Fatalf("feed data fail:%s", err)
+		log.Fatalf("[%d]feed data fail:%s", b.id, err)
 	}
-	log.Debugf("append %s", common.BytesToString(data))
+	log.Debugf("[%d]append %s", b.id, common.BytesToString(data))
 }
 
 func (b *Decoder) readLine(line []byte) (n int, err error) {
@@ -129,7 +137,7 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 				return nil
 			}
 			if len(b.token) < 2 || b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
-				log.Errorf("parse simple string fail:%s", common.BytesToString(b.token))
+				log.Errorf("[%d]parse simple string fail:%s", b.id, common.BytesToString(b.token))
 				b.state = stateType
 				break
 			}
@@ -141,7 +149,7 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 			n, err := b.readLine(b.token[b.len:])
 			b.len += n
 			if err == io.ErrShortBuffer {
-				log.Errorf("parse bulk size fail:%s", common.BytesToString(b.token))
+				log.Errorf("[%d]parse bulk size fail:%s", b.id, common.BytesToString(b.token))
 				b.state = stateType
 				break
 			}
@@ -151,7 +159,7 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 
 			size, err := common.Btoi(b.token[:b.len-2])
 			if err != nil {
-				log.Errorf("parse bulk size fail:%s", common.BytesToString(b.token))
+				log.Errorf("[%d]parse bulk size fail:%s", b.id, common.BytesToString(b.token))
 				b.state = stateType
 				break
 			}
@@ -163,7 +171,7 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 				return nil
 			}
 			if t != '$' {
-				log.Errorf("parse bulk len pre fail:%s", string(t))
+				log.Errorf("[%d]parse bulk len pre fail:%s", b.id, string(t))
 				b.state = stateType
 				break
 			}
@@ -174,7 +182,7 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 			n, err := b.readLine(b.token[b.len:])
 			b.len += n
 			if err == io.ErrShortBuffer {
-				log.Errorf("parse bulk size fail:%s", common.BytesToString(b.token))
+				log.Errorf("[%d]parse bulk size fail:%s", b.id, common.BytesToString(b.token))
 				b.state = stateType
 				break
 			}
@@ -182,9 +190,15 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 				return nil
 			}
 
+			if len(b.token) < 2 || b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
+				log.Errorf("[%d]parse bulk len fail:%s", b.id, common.BytesToString(b.token))
+				b.state = stateType
+				break
+			}
+
 			size, err := common.Btoi(b.token[:b.len-2])
 			if err != nil {
-				log.Errorf("parse bulk len fail:%s", common.BytesToString(b.token))
+				log.Errorf("[%d]parse bulk len fail:%s", b.id, common.BytesToString(b.token))
 				b.state = stateType
 				break
 			}
@@ -203,7 +217,7 @@ func (b *Decoder) TryDecode() (ret interface{}) {
 			}
 
 			if len(b.token) < 2 || b.token[len(b.token)-2] != '\r' || b.token[len(b.token)-1] != '\n' {
-				log.Errorf("parse bulk data fail:%s", common.BytesToString(b.token))
+				log.Errorf("[%d]parse bulk data fail:%s", b.id, common.BytesToString(b.token))
 				b.state = stateType
 				break
 			}

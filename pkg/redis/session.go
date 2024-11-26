@@ -14,7 +14,7 @@ type Session struct {
 }
 
 func NewSession(address string) *Session {
-	return &Session{address: address, in: &Decoder{}, out: &Decoder{}, lastTime: time.Now()}
+	return &Session{address: address, in: NewDecoder(), out: NewDecoder(), lastTime: time.Now()}
 }
 
 func (s *Session) AppendAndFetch(data []byte, in bool) (ret []interface{}) {
