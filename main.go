@@ -31,7 +31,11 @@ var (
 	- single: output to single redis, params is redis address, eg: single:127.0.0.1:8003
 	- cluster： output to redis cluster, params is cluster address, eg: cluster:127.0.0.1:8003,127.0.0.2:8003
 	- count: count key frequency which more than threshold every seconds, eg: count:1
-	- histogram: statistical histogram based on specified attributes, eg: histogram:req.size, histogram:rsp.size`)
+	- histogram: statistical histogram based on specified attributes, eg: 
+		- histogram:req.size: request data size 
+		- histogram:rsp.size: respond data size 
+		- histogram:req.len: request parameter number
+		- histogram:rsp.len: respond parameter number`)
 	workerNum = flag.Int("worker-num", 10, "worker number")
 	interf    = flag.String("i", "any", "network interface")
 	buffSize  = flag.Int("B", 256<<20, "buffer size")

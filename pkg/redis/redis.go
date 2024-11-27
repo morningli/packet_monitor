@@ -275,13 +275,14 @@ type HistogramWriter struct {
 	mux       sync.RWMutex
 	histogram *hdrhistogram.WindowedHistogram
 	mtime     int64
-	target    string
+	target    [2]string
+	f         func(rsp Resp) int64
 }
 
 func (w *HistogramWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byte) error {
 	const statTime = 300000000
 
-	if w.target != "rsp.size" {
+	if w.target[0] != "rsp" {
 		return nil
 	}
 
@@ -292,7 +293,7 @@ func (w *HistogramWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data [
 
 	w.mux.RLock()
 	for _, r := range requests {
-		err := w.histogram.Current.RecordValue(int64(r.Size()))
+		err := w.histogram.Current.RecordValue(w.f(r))
 		if err != nil {
 			log.Errorf("stat req size fail, err:%s", err.Error())
 		}
@@ -300,11 +301,11 @@ func (w *HistogramWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data [
 	w.mux.RUnlock()
 
 	oldTime := atomic.LoadInt64(&w.mtime)
-	if time.Now().Unix()-oldTime < statTime {
+	if time.Now().UnixMicro()-oldTime < statTime {
 		return nil
 	}
 
-	ok := atomic.CompareAndSwapInt64(&w.mtime, oldTime, time.Now().Unix())
+	ok := atomic.CompareAndSwapInt64(&w.mtime, oldTime, time.Now().UnixMicro())
 	if !ok {
 		return nil
 	}
@@ -318,7 +319,7 @@ func (w *HistogramWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data [
 	w.mux.Unlock()
 
 	for p, r := range results {
-		fmt.Printf("[%d]rsp.size %f%%:%d\n", oldTime, p, r)
+		fmt.Printf("[%d]rsp.size %.2f%%:%d\n", oldTime, p, r)
 	}
 	return nil
 }
@@ -326,13 +327,46 @@ func (w *HistogramWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data [
 const bucketNum = 10
 
 func NewHistogramWriter(minValue, maxValue int64, target string) *HistogramWriter {
-	return &HistogramWriter{target: target, histogram: hdrhistogram.NewWindowed(bucketNum, minValue, maxValue, 2), sessions: NewSessionMgr()}
+	params := strings.Split(target, ".")
+	if len(params) != 2 ||
+		(params[0] != "req" && params[0] != "rsp") {
+		log.Fatalf("histogram target invalid:%s", target)
+	}
+	h := &HistogramWriter{
+		target:    [2]string{params[0], params[1]},
+		histogram: hdrhistogram.NewWindowed(bucketNum, minValue, maxValue, 2),
+		sessions:  NewSessionMgr(),
+	}
+	switch params[1] {
+	case "size":
+		h.f = func(rsp Resp) int64 {
+			return int64(rsp.Size())
+		}
+	case "len":
+		h.f = func(rsp Resp) int64 {
+			a := rsp.Value()
+			switch b := a.(type) {
+			case nil:
+				return 0
+			case []byte:
+				return 1
+			case []Resp:
+				return int64(len(b))
+			default:
+				log.Fatalf("unknown respond:(%T)%+v", a, a)
+			}
+			return 0
+		}
+	default:
+		log.Fatalf("histogram target invalid:%s", target)
+	}
+	return h
 }
 
 func (w *HistogramWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
 	const statTime = 300000000
 
-	if w.target != "req.size" {
+	if w.target[0] != "req" {
 		return nil
 	}
 
@@ -343,7 +377,7 @@ func (w *HistogramWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []
 
 	w.mux.RLock()
 	for _, r := range requests {
-		err := w.histogram.Current.RecordValue(int64(r.Size()))
+		err := w.histogram.Current.RecordValue(w.f(r))
 		if err != nil {
 			log.Errorf("stat req size fail, err:%s", err.Error())
 		}
@@ -351,11 +385,11 @@ func (w *HistogramWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []
 	w.mux.RUnlock()
 
 	oldTime := atomic.LoadInt64(&w.mtime)
-	if time.Now().Unix()-oldTime < statTime {
+	if time.Now().UnixMicro()-oldTime < statTime {
 		return nil
 	}
 
-	ok := atomic.CompareAndSwapInt64(&w.mtime, oldTime, time.Now().Unix())
+	ok := atomic.CompareAndSwapInt64(&w.mtime, oldTime, time.Now().UnixMicro())
 	if !ok {
 		return nil
 	}
@@ -369,7 +403,7 @@ func (w *HistogramWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []
 	w.mux.Unlock()
 
 	for p, r := range results {
-		fmt.Printf("[%d]req.size %f%%:%d\n", oldTime, p, r)
+		fmt.Printf("[%d]req.size %.2f%%:%d\n", oldTime, p, r)
 	}
 	return nil
 }
