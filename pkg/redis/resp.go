@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"github.com/emirpasic/gods/stacks"
 	"github.com/morningli/packet_monitor/pkg/common"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -90,11 +89,11 @@ type Decoder struct {
 	data NoCopyBuffer
 
 	cur   Resp
-	stack stacks.Stack
+	stack *common.Stack
 }
 
 func NewDecoder(in bool) *Decoder {
-	return &Decoder{id: atomic.AddInt32(&id, 1), in: in}
+	return &Decoder{id: atomic.AddInt32(&id, 1), in: in, stack: common.NewStack()}
 }
 
 func (b *Decoder) Append(data []byte) {
@@ -125,7 +124,7 @@ func (b *Decoder) ResetCurrent() {
 }
 
 func (b *Decoder) ArrayItemDone() bool {
-	v, _ := b.stack.Pop()
+	v := b.stack.Pop()
 	last := v.(Resp)
 	last.array = append(last.array, b.cur)
 	last.len--
@@ -254,7 +253,7 @@ func (b *Decoder) TryDecodeRespond() (ret Resp) {
 			}
 			b.cur.state = stateDone
 		case stateDone:
-			if !b.stack.Empty() && !b.ArrayItemDone() {
+			if b.stack.Size() != 0 && !b.ArrayItemDone() {
 				break
 			}
 			ret = b.cur
