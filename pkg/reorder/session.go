@@ -41,8 +41,6 @@ func NewSession(localHost net.IP, localPort layers.TCPPort, remoteHost net.IP, r
 }
 
 func (s *Session) AddPacket(packet gopacket.Packet) {
-	s.mux.Lock()
-	defer s.mux.Unlock()
 
 	s.lastTime = time.Now()
 

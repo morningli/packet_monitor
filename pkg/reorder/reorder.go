@@ -151,8 +151,9 @@ func (s *Monitor) Feed(packet gopacket.Packet) {
 		session = tmp.(*Session)
 	}
 
+	session.mux.Lock()
+	defer session.mux.Unlock()
 	session.AddPacket(packet)
-
 	for {
 		packet, ok := session.TryGetPacket(in)
 		if !ok {
