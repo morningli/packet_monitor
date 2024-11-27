@@ -351,7 +351,7 @@ func NewHistogramWriter(minValue, maxValue int64, target string) *HistogramWrite
 				return 0
 			case []byte:
 				return 1
-			case []Resp:
+			case []interface{}:
 				return int64(len(b))
 			default:
 				log.Fatalf("unknown respond:(%T)%+v", a, a)
