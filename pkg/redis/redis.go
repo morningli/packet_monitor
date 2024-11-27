@@ -111,7 +111,7 @@ func (w *NetworkWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []by
 	go func() {
 		atomic.AddInt64(&runningWrite, 1)
 		for _, r := range requests {
-			args, ok := r.([]interface{})
+			args, ok := r.Value().([]interface{})
 			if !ok {
 				continue
 			}
@@ -158,7 +158,7 @@ func (w *FileWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte)
 		buff.WriteString(srcPort.String())
 		buff.WriteString("]")
 
-		args, ok := r.([]interface{})
+		args, ok := r.Value().([]interface{})
 		if !ok {
 			continue
 		}
@@ -203,7 +203,7 @@ func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte
 	const statTime = 1000000
 
 	for _, r := range requests {
-		args, ok := r.([]interface{})
+		args, ok := r.Value().([]interface{})
 		if !ok {
 			continue
 		}
@@ -292,17 +292,7 @@ func (w *HistogramWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data [
 
 	w.mux.RLock()
 	for _, r := range requests {
-		total := 0
-		switch rsp := r.(type) {
-		case []interface{}:
-			for _, a := range rsp {
-				total += len(a.(string))
-			}
-		case []byte:
-			total = len(rsp)
-		}
-
-		err := w.histogram.Current.RecordValue(int64(total))
+		err := w.histogram.Current.RecordValue(int64(r.Size()))
 		if err != nil {
 			log.Errorf("stat req size fail, err:%s", err.Error())
 		}
@@ -353,15 +343,7 @@ func (w *HistogramWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []
 
 	w.mux.RLock()
 	for _, r := range requests {
-		args, ok := r.([]interface{})
-		if !ok {
-			continue
-		}
-		total := 0
-		for _, a := range args {
-			total += len(a.(string))
-		}
-		err := w.histogram.Current.RecordValue(int64(total))
+		err := w.histogram.Current.RecordValue(int64(r.Size()))
 		if err != nil {
 			log.Errorf("stat req size fail, err:%s", err.Error())
 		}

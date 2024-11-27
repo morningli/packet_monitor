@@ -14,10 +14,10 @@ type Session struct {
 }
 
 func NewSession(address string) *Session {
-	return &Session{address: address, in: NewDecoder(), out: NewDecoder(), lastTime: time.Now()}
+	return &Session{address: address, in: NewDecoder(true), out: NewDecoder(false), lastTime: time.Now()}
 }
 
-func (s *Session) AppendAndFetch(data []byte, in bool) (ret []interface{}) {
+func (s *Session) AppendAndFetch(data []byte, in bool) (ret []Resp) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -30,7 +30,7 @@ func (s *Session) AppendAndFetch(data []byte, in bool) (ret []interface{}) {
 	d.Append(data)
 	for {
 		args := d.TryDecode()
-		if args == nil {
+		if !args.Valid() {
 			break
 		}
 		ret = append(ret, args)
@@ -102,7 +102,7 @@ func (s *SessionMgr) session(address string) *Session {
 	return session
 }
 
-func (s *SessionMgr) AppendAndFetch(address string, data []byte, in bool) []interface{} {
+func (s *SessionMgr) AppendAndFetch(address string, data []byte, in bool) []Resp {
 	session := s.session(address)
 	return session.AppendAndFetch(data, in)
 }
