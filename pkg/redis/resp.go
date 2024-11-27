@@ -66,11 +66,14 @@ type Resp struct {
 	token []byte
 	array []interface{}
 	total int //raw data len
+	null  bool
 }
 
 func (r *Resp) Value() interface{} {
 	if r.t == '*' {
 		return r.array
+	} else if r.null {
+		return nil
 	}
 	return r.token[:len(r.token)-2]
 }
@@ -231,6 +234,14 @@ func (b *Decoder) TryDecodeRespond() (ret Resp) {
 				b.ResetCurrent()
 				break
 			}
+
+			//check null
+			if size == -1 {
+				b.cur.state = stateDone
+				b.cur.null = true
+				break
+			}
+
 			b.cur.len = size + 2
 			b.cur.token = make([]byte, size+2)
 			b.cur.state = stateBulkData

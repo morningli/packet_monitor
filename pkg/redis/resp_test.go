@@ -84,6 +84,16 @@ func TestRespBuffer_Feed2(t *testing.T) {
 		require.Equal(t, 9, args.Size())
 	})
 
+	t.Run("null", func(t *testing.T) {
+		data := []byte("$-1\r\n")
+		b := NewDecoder(false)
+		b.Append(data)
+		args := b.TryDecode()
+		require.True(t, args.Valid())
+		require.Nil(t, args.Value())
+		require.Equal(t, 5, args.Size())
+	})
+
 	t.Run("string", func(t *testing.T) {
 		data := []byte("+OK\r\n")
 		b := NewDecoder(false)
