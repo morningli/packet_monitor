@@ -183,7 +183,7 @@ func (b *Decoder) TryDecodeRespond() (ret Resp) {
 				b.ResetCurrent()
 				break
 			}
-			ret.state = stateDone
+			b.cur.state = stateDone
 		case stateBulkSize:
 			n, err := b.readLine(b.cur.token[b.cur.len:])
 			b.cur.len += n
