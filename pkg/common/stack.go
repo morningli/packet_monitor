@@ -19,6 +19,7 @@ func (s *Stack) Pop() interface{} {
 	if e == nil {
 		return nil
 	}
+	s.v.Remove(e)
 	return e.Value
 }
 

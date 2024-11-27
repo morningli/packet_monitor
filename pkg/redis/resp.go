@@ -127,9 +127,9 @@ func (b *Decoder) ArrayItemDone() bool {
 	v := b.stack.Pop()
 	last := v.(Resp)
 	last.array = append(last.array, b.cur)
-	last.len--
+	last.size--
 	last.total += b.cur.total
-	if last.len == 0 {
+	if last.size == 0 {
 		b.cur = last
 		b.cur.state = stateDone
 		return true
@@ -219,7 +219,7 @@ func (b *Decoder) TryDecodeRespond() (ret Resp) {
 				return Resp{}
 			}
 
-			if len(b.cur.token) < 2 || b.cur.token[len(b.cur.token)-2] != '\r' || b.cur.token[len(b.cur.token)-1] != '\n' {
+			if b.cur.len < 2 || b.cur.token[b.cur.len-2] != '\r' || b.cur.token[b.cur.len-1] != '\n' {
 				log.Errorf("[%d]parse bulk len fail:%s", b.id, common.BytesToString(b.cur.token))
 				b.ResetCurrent()
 				break
@@ -253,7 +253,8 @@ func (b *Decoder) TryDecodeRespond() (ret Resp) {
 			}
 			b.cur.state = stateDone
 		case stateDone:
-			if b.stack.Size() != 0 && !b.ArrayItemDone() {
+			if b.stack.Size() != 0 {
+				b.ArrayItemDone()
 				break
 			}
 			ret = b.cur
@@ -329,7 +330,7 @@ func (b *Decoder) TryDecodeRequest() (ret Resp) {
 				return Resp{}
 			}
 
-			if len(b.cur.token) < 2 || b.cur.token[len(b.cur.token)-2] != '\r' || b.cur.token[len(b.cur.token)-1] != '\n' {
+			if b.cur.len < 2 || b.cur.token[b.cur.len-2] != '\r' || b.cur.token[b.cur.len-1] != '\n' {
 				log.Errorf("[%d]parse bulk len fail:%s", b.id, common.BytesToString(b.cur.token))
 				b.ResetCurrent()
 				break
