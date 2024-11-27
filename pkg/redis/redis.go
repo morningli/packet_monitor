@@ -191,7 +191,7 @@ func (w *CountWriter) FlowOut(dstHost net.IP, dstPort layers.TCPPort, data []byt
 }
 
 func NewCountWriter(minCount int) *CountWriter {
-	return &CountWriter{min: int64(minCount), mtime: time.Now().Unix(), sessions: NewSessionMgr()}
+	return &CountWriter{min: int64(minCount), mtime: time.Now().UnixMicro(), sessions: NewSessionMgr()}
 }
 
 func (w *CountWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte) error {
@@ -336,6 +336,7 @@ func NewHistogramWriter(minValue, maxValue int64, target string) *HistogramWrite
 		target:    [2]string{params[0], params[1]},
 		histogram: hdrhistogram.NewWindowed(bucketNum, minValue, maxValue, 2),
 		sessions:  NewSessionMgr(),
+		mtime:     time.Now().UnixMicro(),
 	}
 	switch params[1] {
 	case "size":
