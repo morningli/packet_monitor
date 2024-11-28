@@ -164,7 +164,7 @@ func (w *FileWriter) FlowIn(srcHost net.IP, srcPort layers.TCPPort, data []byte)
 		}
 		for _, v := range args {
 			buff.WriteString(" \"")
-			buff.Write(v.([]byte))
+			buff.WriteString(v.(string))
 			buff.WriteString("\"")
 		}
 
