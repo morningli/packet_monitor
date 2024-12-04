@@ -83,13 +83,17 @@ func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
 	w := &NetworkWriter{address: address, cluster: cluster, sessions: NewSessionMgr()}
 	if cluster {
 		w.client = redis.NewClusterClient(&redis.ClusterOptions{
-			Addrs:    strings.Split(w.address, ","),
-			PoolSize: 3000,
+			Addrs:          strings.Split(w.address, ","),
+			PoolSize:       400,
+			MaxActiveConns: 400,
+			MaxRetries:     -1,
 		})
 	} else {
 		w.client = redis.NewClient(&redis.Options{
-			Addr:     w.address,
-			PoolSize: 3000,
+			Addr:           w.address,
+			PoolSize:       400,
+			MaxActiveConns: 400,
+			MaxRetries:     -1,
 		})
 	}
 	go func() {
