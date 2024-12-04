@@ -87,6 +87,8 @@ func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
 			PoolSize:       400,
 			MaxActiveConns: 400,
 			MaxRetries:     -1,
+			MinIdleConns:   10,
+			MaxIdleConns:   10,
 		})
 	} else {
 		w.client = redis.NewClient(&redis.Options{
@@ -94,6 +96,8 @@ func NewNetworkWriter(address string, cluster bool) *NetworkWriter {
 			PoolSize:       400,
 			MaxActiveConns: 400,
 			MaxRetries:     -1,
+			MinIdleConns:   10,
+			MaxIdleConns:   10,
 		})
 	}
 	go func() {
